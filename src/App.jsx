@@ -119,7 +119,7 @@ const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'DM Sans', 'Segoe UI', sans-serif";
 
 const theme = {
-  bg:"#1a1714", surface:"#241f1b", surfaceHover:"#2e2824",
+  bg:"#1a1714", surface:"#1a1714", surfaceHover:"#241f1b",
   border:"#3a3330", borderLight:"#4a4038",
   text:"#e8e0d6", textMuted:"#9a8e82",
   accent:"#c8663e", accentLight:"#d4845f", accentBg:"rgba(200,102,62,0.12)",
@@ -563,7 +563,7 @@ export default function App() {
       <header style={css.header}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
-            <h1 style={css.title}>🍳 The Family Cookbook</h1>
+            <h1 style={css.title}>🍳 McGorrey Family Cookbook</h1>
             <p style={css.subtitle}>{recipes.length} recipes — your kitchen, your rules {saveStatus&&<span style={{color:theme.green,marginLeft:8}}>{saveStatus}</span>}</p>
           </div>
           <button onClick={handleResetData} style={{...css.btn(),fontSize:11,padding:"4px 8px",color:theme.textMuted,border:"none"}} title="Reset to seed data">Reset</button>
