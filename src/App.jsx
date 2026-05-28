@@ -741,7 +741,7 @@ export default function App() {
             <h1 style={css.title}>🍳 McGorrey Family Cookbook</h1>
             <p style={css.subtitle}>{recipes.length} recipes — your kitchen, your rules {saveStatus&&<span style={{color:theme.green,marginLeft:8}}>{saveStatus}</span>}</p>
           </div>
-          <button onClick={handleResetData} style={{...css.btn(),fontSize:11,padding:"4px 8px",color:theme.textMuted,border:"none"}} title="Reset to seed data">Reset</button>
+
         </div>
         <nav style={css.nav}>
           {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"}].map(({k,l})=>(
