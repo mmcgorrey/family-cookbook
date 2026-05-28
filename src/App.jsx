@@ -130,7 +130,7 @@ const theme = {
 };
 
 const css = {
-  app:{ fontFamily:FONT_BODY, background:theme.bg, color:theme.text, minHeight:"100vh", maxWidth:"100%", margin:"0 auto", padding:"0 16px 80px" },
+  app:{ fontFamily:FONT_BODY, background:theme.bg, color:theme.text, minHeight:"100vh", maxWidth:1200, margin:"0 auto", padding:"0 16px 80px" },
   header:{ padding:"28px 0 20px", borderBottom:`1px solid ${theme.border}`, marginBottom:24 },
   title:{ fontFamily:FONT_DISPLAY, fontSize:28, fontWeight:700, margin:0, color:theme.text, letterSpacing:"-0.02em" },
   subtitle:{ fontFamily:FONT_BODY, fontSize:13, color:theme.textMuted, margin:"4px 0 0", fontWeight:400 },
