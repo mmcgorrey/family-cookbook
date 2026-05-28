@@ -945,6 +945,7 @@ export default function App() {
         <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan}/>
       ):view==="collections"?(
         <Collections recipes={recipes} collections={collections} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection}/>
+      ):null
       )}
 
       {showAdd&&<RecipeFormModal onClose={()=>setShowAdd(false)} onSave={addRecipe} allTags={allTags}/>}
