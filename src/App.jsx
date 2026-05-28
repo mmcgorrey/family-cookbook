@@ -116,6 +116,13 @@ async function saveMealPlanToDb(plan) {
   try { await setDoc(doc(db, "app", "mealplan"), { days: plan }); } catch(e) { console.error("Save meal plan failed:", e); }
 }
 
+async function saveCollectionToDb(col) {
+  try { await setDoc(doc(db, "collections", col.id), col); } catch(e) { console.error("Save collection failed:", e); }
+}
+async function deleteCollectionFromDb(id) {
+  try { await deleteDoc(doc(db, "collections", id)); } catch(e) { console.error("Delete collection failed:", e); }
+}
+
 // ─── Styles ───
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
 const FONT_BODY = "'DM Sans', 'Segoe UI', sans-serif";
@@ -599,6 +606,125 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan}) {
   );
 }
 
+// ─── Collections ───
+
+function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCollection,onAddToPlanFromCollection}) {
+  const [showCreate,setShowCreate]=useState(false);
+  const [editingCol,setEditingCol]=useState(null);
+  const [name,setName]=useState("");
+  const [description,setDescription]=useState("");
+  const [selectedRecipes,setSelectedRecipes]=useState([]);
+  const [search,setSearch]=useState("");
+  const [expandedCol,setExpandedCol]=useState(null);
+
+  const startCreate=()=>{setName("");setDescription("");setSelectedRecipes([]);setShowCreate(true);setEditingCol(null);};
+  const startEdit=(col)=>{setName(col.name);setDescription(col.description||"");setSelectedRecipes([...col.recipeIds]);setShowCreate(true);setEditingCol(col);};
+
+  const toggleRecipe=(id)=>{
+    setSelectedRecipes(p=>p.includes(id)?p.filter(x=>x!==id):[...p,id]);
+  };
+
+  const handleSave=()=>{
+    if(!name.trim()||selectedRecipes.length===0)return;
+    const col={
+      id:editingCol?editingCol.id:"col"+Math.random().toString(36).slice(2,9),
+      name:name.trim(),
+      description:description.trim(),
+      recipeIds:selectedRecipes,
+      createdAt:editingCol?editingCol.createdAt:Date.now(),
+    };
+    onSave(col);
+    setShowCreate(false);
+  };
+
+  const filteredRecipes=recipes.filter(r=>!search||r.title.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:20,margin:0}}>Collections</h3>
+        <button onClick={startCreate} style={{fontFamily:"'DM Sans', sans-serif",fontSize:13,fontWeight:600,padding:"8px 16px",borderRadius:6,border:"none",cursor:"pointer",background:"#c8663e",color:"#fff"}}>+ New Collection</button>
+      </div>
+
+      {collections.length===0&&!showCreate&&(
+        <div style={{textAlign:"center",padding:40,color:"#9a8e82"}}>
+          <p style={{fontSize:24,margin:"0 0 8px"}}>📚</p>
+          <p>No collections yet. Group your favorite meal combos together!</p>
+        </div>
+      )}
+
+      {collections.map(col=>{
+        const colRecipes=col.recipeIds.map(id=>recipes.find(r=>r.id===id)).filter(Boolean);
+        const isExpanded=expandedCol===col.id;
+        return (
+          <div key={col.id} style={{marginBottom:10,background:"#1a1714",borderRadius:10,border:"1px solid #3a3330",padding:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}} onClick={()=>setExpandedCol(isExpanded?null:col.id)}>
+              <div>
+                <h4 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:17,margin:0}}>{col.name}</h4>
+                {col.description&&<p style={{fontSize:13,color:"#9a8e82",margin:"4px 0 0"}}>{col.description}</p>}
+                <div style={{fontSize:12,color:"#9a8e82",marginTop:4}}>{colRecipes.length} recipe{colRecipes.length!==1?"s":""}</div>
+              </div>
+              <span style={{color:"#9a8e82",fontSize:18}}>{isExpanded?"▲":"▼"}</span>
+            </div>
+            {isExpanded&&(
+              <div style={{marginTop:12}}>
+                {colRecipes.map(r=>(
+                  <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #3a3330",fontSize:14}}>
+                    {r.mealType&&<span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:3,background:r.mealType==="Main"?"rgba(200,102,62,0.12)":"rgba(106,154,91,0.15)",color:r.mealType==="Main"?"#c8663e":"#6a9a5b"}}>{r.mealType}</span>}
+                    <span>{r.title}</span>
+                  </div>
+                ))}
+                <div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap"}}>
+                  <button onClick={()=>onAddToShoppingFromCollection(col.recipeIds)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:"#c8663e",color:"#fff"}}>🛒 Shopping List</button>
+                  <button onClick={()=>onAddToPlanFromCollection(col)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"transparent",color:"#e8e0d6"}}>📅 Add to Planner</button>
+                  <button onClick={()=>startEdit(col)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"transparent",color:"#e8e0d6"}}>✏️ Edit</button>
+                  <button onClick={()=>onDelete(col.id)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:"#b85450",color:"#fff"}}>Delete</button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {showCreate&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16}}>
+          <div style={{background:"#1a1714",border:"1px solid #3a3330",borderRadius:12,padding:24,width:"100%",maxWidth:520,maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+            <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:22,margin:"0 0 18px"}}>{editingCol?"Edit Collection":"New Collection"}</h3>
+            <div style={{marginBottom:14}}>
+              <label style={{display:"block",fontSize:12,fontWeight:600,color:"#9a8e82",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"}}>Name *</label>
+              <input style={{fontFamily:"'DM Sans', sans-serif",fontSize:14,padding:"9px 12px",borderRadius:6,border:"1px solid #3a3330",background:"#1a1714",color:"#e8e0d6",outline:"none",width:"100%",boxSizing:"border-box"}} value={name} onChange={e=>setName(e.target.value)} placeholder="E.g. Traeger Christmas Feast"/>
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={{display:"block",fontSize:12,fontWeight:600,color:"#9a8e82",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"}}>Description</label>
+              <input style={{fontFamily:"'DM Sans', sans-serif",fontSize:14,padding:"9px 12px",borderRadius:6,border:"1px solid #3a3330",background:"#1a1714",color:"#e8e0d6",outline:"none",width:"100%",boxSizing:"border-box"}} value={description} onChange={e=>setDescription(e.target.value)} placeholder="Our go-to holiday spread"/>
+            </div>
+            <div style={{marginBottom:14}}>
+              <label style={{display:"block",fontSize:12,fontWeight:600,color:"#9a8e82",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"}}>Recipes ({selectedRecipes.length} selected)</label>
+              <input style={{fontFamily:"'DM Sans', sans-serif",fontSize:14,padding:"9px 12px",borderRadius:6,border:"1px solid #3a3330",background:"#1a1714",color:"#e8e0d6",outline:"none",width:"100%",boxSizing:"border-box",marginBottom:6}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search recipes..."/>
+              <div style={{maxHeight:250,overflowY:"auto"}}>
+                {filteredRecipes.map(r=>{
+                  const isSel=selectedRecipes.includes(r.id);
+                  return (
+                    <div key={r.id} onClick={()=>toggleRecipe(r.id)} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 8px",cursor:"pointer",borderRadius:4,background:isSel?"rgba(200,102,62,0.12)":"transparent",marginBottom:2}}>
+                      <span style={{width:18,height:18,borderRadius:3,border:"2px solid "+(isSel?"#6a9a5b":"#3a3330"),background:isSel?"rgba(106,154,91,0.15)":"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#6a9a5b",flexShrink:0}}>{isSel?"✓":""}</span>
+                      <span style={{fontSize:14}}>{r.title}</span>
+                      {r.mealType&&<span style={{fontSize:10,color:"#9a8e82",marginLeft:"auto"}}>{r.mealType}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:18}}>
+              <button onClick={()=>setShowCreate(false)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:13,fontWeight:600,padding:"8px 16px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"transparent",color:"#e8e0d6"}}>Cancel</button>
+              <button onClick={handleSave} style={{fontFamily:"'DM Sans', sans-serif",fontSize:13,fontWeight:600,padding:"8px 16px",borderRadius:6,border:"none",cursor:"pointer",background:"#c8663e",color:"#fff",opacity:(!name.trim()||selectedRecipes.length===0)?0.5:1}} disabled={!name.trim()||selectedRecipes.length===0}>{editingCol?"Save Changes":"Create Collection"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── App ───
 export default function App() {
   const [recipes,setRecipes]=useState([]);
@@ -613,6 +739,7 @@ export default function App() {
   const [editingRecipe,setEditingRecipe]=useState(null);
   const [shoppingRecipes,setShoppingRecipes]=useState([]);
   const [mealPlan,setMealPlan]=useState({});
+  const [collections,setCollections]=useState([]);
   const [loaded,setLoaded]=useState(false);
   const [saveStatus,setSaveStatus]=useState("");
 
@@ -641,6 +768,13 @@ export default function App() {
   useEffect(()=>{
     const unsub = onSnapshot(doc(db, "app", "mealplan"), (snap) => {
       if (snap.exists()) setMealPlan(snap.data().days || {});
+    });
+    return () => unsub();
+  },[]);
+
+  useEffect(()=>{
+    const unsub = onSnapshot(collection(db, "collections"), (snapshot) => {
+      setCollections(snapshot.docs.map(d => d.data()));
     });
     return () => unsub();
   },[]);
@@ -730,6 +864,46 @@ export default function App() {
     updateMealPlan({});
   };
 
+  const saveCollection=(col)=>{
+    setCollections(p=>{
+      const exists=p.find(c=>c.id===col.id);
+      if(exists)return p.map(c=>c.id===col.id?col:c);
+      return[...p,col];
+    });
+    saveCollectionToDb(col);
+  };
+
+  const removeCollection=(id)=>{
+    setCollections(p=>p.filter(c=>c.id!==id));
+    deleteCollectionFromDb(id);
+  };
+
+  const addToShoppingFromCollection=(ids)=>{
+    let updated=[...shoppingRecipes];
+    ids.forEach(id=>{
+      if(!updated.find(s=>s.id===id)){
+        const r=recipes.find(x=>x.id===id);
+        if(r)updated.push({id,servings:r.servings});
+      }
+    });
+    setShoppingRecipes(updated);
+    saveShoppingToDb(updated);
+    setView("shop");
+  };
+
+  const addToPlanFromCollection=(col)=>{
+    const today=DAYS[new Date().getDay()===0?6:new Date().getDay()-1];
+    updateMealPlan(prev=>{
+      const u={...prev};
+      if(!u[today])u[today]=[];
+      col.recipeIds.forEach(id=>{
+        if(!u[today].includes(id))u[today]=[...u[today],id];
+      });
+      return u;
+    });
+    setView("plan");
+  };
+
   if(!loaded)return <div style={{...css.app,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh"}}><p style={{color:theme.textMuted,fontSize:16}}>Loading your cookbook...</p></div>;
 
   return (
@@ -744,7 +918,7 @@ export default function App() {
 
         </div>
         <nav style={css.nav}>
-          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"}].map(({k,l})=>(
+          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"},{k:"collections",l:"📚 Collections"}].map(({k,l})=>(
             <button key={k} style={css.navBtn(view===k&&!selectedId)} onClick={()=>{setView(k);setSelectedId(null);}}>{l}</button>
           ))}
           <button style={css.navBtn(false)} onClick={()=>setShowImport(true)}>🤖 Import</button>
@@ -769,6 +943,8 @@ export default function App() {
         <ShoppingList recipes={recipes} shoppingRecipes={shoppingRecipes} onRemove={removeFromShopping} onClear={clearShopping}/>
       ):(
         <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan}/>
+      ):view==="collections"?(
+        <Collections recipes={recipes} collections={collections} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection}/>
       )}
 
       {showAdd&&<RecipeFormModal onClose={()=>setShowAdd(false)} onSave={addRecipe} allTags={allTags}/>}
