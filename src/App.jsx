@@ -1,19 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-
-// ─── Storage helpers (localStorage for Vercel deploy) ───
-const STORAGE_KEY = "cookbook-recipes";
-const STORAGE_SHOP = "cookbook-shopping";
-const STORAGE_PLAN = "cookbook-mealplan";
-
-function loadData(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch { return fallback; }
-}
-function saveData(key, data) {
-  try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) { console.error("Save failed:", e); }
-}
+import { db, collection, doc, setDoc, deleteDoc, onSnapshot } from "./firebase";
 
 // ─── Seed Data ───
 const SEED_RECIPES = [
@@ -113,6 +99,20 @@ const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sun
 const fmtDate = (ts) => ts ? new Date(ts).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "Never";
 const uid = () => "r" + Math.random().toString(36).slice(2,9);
 const scaleAmt = (amount, base, target) => { const v = (amount/base)*target; return v%1===0?v:+v.toFixed(2); };
+
+// ─── Firebase helpers ───
+async function saveRecipeToDb(recipe) {
+  try { await setDoc(doc(db, "recipes", recipe.id), recipe); } catch(e) { console.error("Save recipe failed:", e); }
+}
+async function deleteRecipeFromDb(id) {
+  try { await deleteDoc(doc(db, "recipes", id)); } catch(e) { console.error("Delete recipe failed:", e); }
+}
+async function saveShoppingToDb(shopping) {
+  try { await setDoc(doc(db, "app", "shopping"), { items: shopping }); } catch(e) { console.error("Save shopping failed:", e); }
+}
+async function saveMealPlanToDb(plan) {
+  try { await setDoc(doc(db, "app", "mealplan"), { days: plan }); } catch(e) { console.error("Save meal plan failed:", e); }
+}
 
 // ─── Styles ───
 const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
@@ -365,12 +365,9 @@ function ImportModal({onClose,onSave}) {
       <div style={{...css.modalContent,maxWidth:560}} onClick={e=>e.stopPropagation()}>
         <h3 style={{fontFamily:FONT_DISPLAY,fontSize:22,margin:"0 0 6px"}}>Import Recipe</h3>
         <p style={{fontSize:13,color:theme.textMuted,margin:"0 0 16px"}}>Paste a recipe URL or the full recipe text — AI will parse it into your cookbook.</p>
-
         <textarea style={{...css.textarea,minHeight:120}} value={input} onChange={e=>setInput(e.target.value)}
           placeholder={"Paste a recipe URL, or paste the full recipe text here.\n\nE.g.:\nhttps://example.com/recipe/chicken-tikka\n\nOr paste the full recipe with ingredients and steps..."} />
-
         {status==="error"&&<p style={{color:theme.red,fontSize:13,marginTop:8}}>{error}</p>}
-
         {status==="preview"&&parsed&&(
           <div style={{marginTop:16,padding:14,background:theme.surface,borderRadius:8,border:`1px solid ${theme.border}`}}>
             <h4 style={{fontFamily:FONT_DISPLAY,fontSize:18,margin:"0 0 6px"}}>{parsed.title}</h4>
@@ -381,7 +378,6 @@ function ImportModal({onClose,onSave}) {
             <div>{parsed.tags?.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
           </div>
         )}
-
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}>
           <button onClick={onClose} style={css.btn()}>Cancel</button>
           {status==="preview"?(
@@ -516,7 +512,7 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan}) {
 
 // ─── App ───
 export default function App() {
-  const [recipes,setRecipes]=useState(()=>loadData(STORAGE_KEY,SEED_RECIPES));
+  const [recipes,setRecipes]=useState([]);
   const [view,setView]=useState("browse");
   const [selectedId,setSelectedId]=useState(null);
   const [search,setSearch]=useState("");
@@ -524,14 +520,42 @@ export default function App() {
   const [showTagFilter,setShowTagFilter]=useState(false);
   const [showAdd,setShowAdd]=useState(false);
   const [showImport,setShowImport]=useState(false);
-  const [shoppingRecipes,setShoppingRecipes]=useState(()=>loadData(STORAGE_SHOP,[]));
-  const [mealPlan,setMealPlan]=useState(()=>loadData(STORAGE_PLAN,{}));
+  const [shoppingRecipes,setShoppingRecipes]=useState([]);
+  const [mealPlan,setMealPlan]=useState({});
+  const [loaded,setLoaded]=useState(false);
   const [saveStatus,setSaveStatus]=useState("");
 
-  // Auto-save
-  useEffect(()=>{saveData(STORAGE_KEY,recipes);setSaveStatus("Saved ✓");const t=setTimeout(()=>setSaveStatus(""),2000);return()=>clearTimeout(t);},[recipes]);
-  useEffect(()=>{saveData(STORAGE_SHOP,shoppingRecipes);},[shoppingRecipes]);
-  useEffect(()=>{saveData(STORAGE_PLAN,mealPlan);},[mealPlan]);
+  // Real-time listener for recipes from Firestore
+  useEffect(()=>{
+    const unsub = onSnapshot(collection(db, "recipes"), (snapshot) => {
+      if (snapshot.empty && !loaded) {
+        // First time: seed the database
+        SEED_RECIPES.forEach(r => saveRecipeToDb(r));
+        setRecipes(SEED_RECIPES);
+      } else {
+        const docs = snapshot.docs.map(d => d.data());
+        setRecipes(docs);
+      }
+      setLoaded(true);
+    });
+    return () => unsub();
+  },[]);
+
+  // Real-time listener for shopping list
+  useEffect(()=>{
+    const unsub = onSnapshot(doc(db, "app", "shopping"), (snap) => {
+      if (snap.exists()) setShoppingRecipes(snap.data().items || []);
+    });
+    return () => unsub();
+  },[]);
+
+  // Real-time listener for meal plan
+  useEffect(()=>{
+    const unsub = onSnapshot(doc(db, "app", "mealplan"), (snap) => {
+      if (snap.exists()) setMealPlan(snap.data().days || {});
+    });
+    return () => unsub();
+  },[]);
 
   const toggleTag=(t)=>setActiveTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
   const allTags=useMemo(()=>{const s=new Set(ALL_TAGS);recipes.forEach(r=>r.tags?.forEach(t=>s.add(t)));return[...s];},[recipes]);
@@ -545,17 +569,76 @@ export default function App() {
   },[recipes,search,activeTags]);
 
   const selected=selectedId?recipes.find(r=>r.id===selectedId):null;
-  const updateRecipe=(updated)=>setRecipes(p=>p.map(r=>r.id===updated.id?updated:r));
-  const deleteRecipe=(id)=>{setRecipes(p=>p.filter(r=>r.id!==id));setSelectedId(null);};
+
+  const updateRecipe=(updated)=>{
+    setRecipes(p=>p.map(r=>r.id===updated.id?updated:r));
+    saveRecipeToDb(updated);
+    setSaveStatus("Synced ✓");
+    setTimeout(()=>setSaveStatus(""),2000);
+  };
+
+  const addRecipe=(recipe)=>{
+    setRecipes(p=>[recipe,...p]);
+    saveRecipeToDb(recipe);
+    setSaveStatus("Synced ✓");
+    setTimeout(()=>setSaveStatus(""),2000);
+  };
+
+  const deleteRecipe=(id)=>{
+    setRecipes(p=>p.filter(r=>r.id!==id));
+    deleteRecipeFromDb(id);
+    setSelectedId(null);
+  };
+
   const addToShoppingList=(recipe)=>{
-    if(!shoppingRecipes.find(s=>s.id===recipe.id))setShoppingRecipes(p=>[...p,{id:recipe.id,servings:recipe.servings}]);
+    const updated = shoppingRecipes.find(s=>s.id===recipe.id) ? shoppingRecipes : [...shoppingRecipes,{id:recipe.id,servings:recipe.servings}];
+    setShoppingRecipes(updated);
+    saveShoppingToDb(updated);
     setView("shop");
   };
+
+  const removeFromShopping=(id)=>{
+    const updated = shoppingRecipes.filter(s=>s.id!==id);
+    setShoppingRecipes(updated);
+    saveShoppingToDb(updated);
+  };
+
+  const clearShopping=()=>{
+    setShoppingRecipes([]);
+    saveShoppingToDb([]);
+  };
+
+  const updateMealPlan=(updater)=>{
+    setMealPlan(prev=>{
+      const updated = typeof updater === 'function' ? updater(prev) : updater;
+      saveMealPlanToDb(updated);
+      return updated;
+    });
+  };
+
   const addToShoppingFromPlan=(ids)=>{
-    setShoppingRecipes(prev=>{let u=[...prev];ids.forEach(id=>{if(!u.find(s=>s.id===id)){const r=recipes.find(x=>x.id===id);if(r)u.push({id,servings:r.servings});}});return u;});
+    let updated=[...shoppingRecipes];
+    ids.forEach(id=>{
+      if(!updated.find(s=>s.id===id)){
+        const r=recipes.find(x=>x.id===id);
+        if(r)updated.push({id,servings:r.servings});
+      }
+    });
+    setShoppingRecipes(updated);
+    saveShoppingToDb(updated);
     setView("shop");
   };
-  const handleResetData=()=>{setRecipes(SEED_RECIPES);setShoppingRecipes([]);setMealPlan({});};
+
+  const handleResetData=async()=>{
+    // Delete all recipes from Firestore
+    recipes.forEach(r=>deleteRecipeFromDb(r.id));
+    // Re-seed
+    SEED_RECIPES.forEach(r=>saveRecipeToDb(r));
+    clearShopping();
+    updateMealPlan({});
+  };
+
+  if(!loaded)return <div style={{...css.app,display:"flex",alignItems:"center",justifyContent:"center",minHeight:"60vh"}}><p style={{color:theme.textMuted,fontSize:16}}>Loading your cookbook...</p></div>;
 
   return (
     <div style={css.app}>
@@ -591,13 +674,13 @@ export default function App() {
           ):(filtered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>))}
         </div>
       ):view==="shop"?(
-        <ShoppingList recipes={recipes} shoppingRecipes={shoppingRecipes} onRemove={id=>setShoppingRecipes(p=>p.filter(s=>s.id!==id))} onClear={()=>setShoppingRecipes([])}/>
+        <ShoppingList recipes={recipes} shoppingRecipes={shoppingRecipes} onRemove={removeFromShopping} onClear={clearShopping}/>
       ):(
-        <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={setMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan}/>
+        <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan}/>
       )}
 
-      {showAdd&&<AddRecipeModal onClose={()=>setShowAdd(false)} onSave={r=>setRecipes(p=>[r,...p])} allTags={allTags}/>}
-      {showImport&&<ImportModal onClose={()=>setShowImport(false)} onSave={r=>setRecipes(p=>[r,...p])}/>}
+      {showAdd&&<AddRecipeModal onClose={()=>setShowAdd(false)} onSave={addRecipe} allTags={allTags}/>}
+      {showImport&&<ImportModal onClose={()=>setShowImport(false)} onSave={addRecipe}/>}
     </div>
   );
 }
