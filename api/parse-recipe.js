@@ -13,6 +13,15 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
   }
 
+  // Check if input is just a URL
+  const trimmed = text.trim();
+  const isUrl = /^https?:\/\/\S+$/i.test(trimmed);
+  if (isUrl) {
+    return res.status(400).json({ 
+      error: "URL detected — the parser can't visit websites. Please copy and paste the actual recipe text (ingredients, steps, etc.) from the page instead." 
+    });
+  }
+
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -24,31 +33,16 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 4000,
+        system: "You are a recipe JSON parser. You ONLY output valid JSON arrays. Never output explanations, apologies, or any text outside of JSON. If you cannot parse the input, return: [{\"title\":\"Unknown Recipe\",\"description\":\"Could not parse\",\"mealType\":\"Main\",\"servings\":4,\"prepTime\":\"\",\"cookTime\":\"\",\"tags\":[],\"ingredients\":[],\"steps\":[],\"sides\":[],\"drinks\":[]}]",
         messages: [
           {
             role: "user",
-            content: `You are a recipe parser. Extract structured recipe data from the following content.
+            content: `Parse this into a JSON array of recipe objects. If there are MULTIPLE distinct dishes (a main + sides + sauces), create SEPARATE objects for each.
 
-CRITICAL: If the content contains MULTIPLE distinct dishes (e.g. a main course AND side dishes AND sauces), split them into SEPARATE recipe objects. A steak recipe with a pepper salad and rice should become 3 separate recipes, not 1.
+Each object needs: title, description, mealType ("Main"/"Side"/"Appetizer"/"Dessert"/"Drink"), servings (number), prepTime, cookTime, tags (from: Beef, Chicken, Pork, Seafood, Vegetarian, Proteins, Greens, Grains, Italian, Mexican, Asian, Grilling, Smoking, Quick Weeknight, Weekend Project, Date Night, Comfort Food, Healthy, Soup/Stew, Breakfast, Dessert, Appetizer, Brisket BBQ), ingredients (array of {name, amount, unit}), steps (string array), sides (suggestions if main), drinks (pairing suggestions).
 
-Respond ONLY with a valid JSON array (even if there's only one recipe), no markdown backticks, no preamble.
+Output ONLY the JSON array, nothing else:
 
-Each recipe object in the array must have:
-{
-  "title": "string",
-  "description": "string (1-2 sentence summary)",
-  "mealType": "Main" or "Side" or "Appetizer" or "Dessert" or "Drink",
-  "servings": number,
-  "prepTime": "string (e.g. '15 min')",
-  "cookTime": "string (e.g. '45 min')",
-  "tags": ["relevant tags from: Beef, Chicken, Pork, Seafood, Vegetarian, Proteins, Greens, Grains, Italian, Mexican, Asian, Grilling, Smoking, Quick Weeknight, Weekend Project, Date Night, Comfort Food, Healthy, Soup/Stew, Breakfast, Dessert, Appetizer, Brisket BBQ"],
-  "ingredients": [{"name": "string", "amount": number, "unit": "string"}],
-  "steps": ["string array of clear instructions"],
-  "sides": ["suggested side dishes if this is a main"],
-  "drinks": ["suggested drink pairings"]
-}
-
-Content to parse:
 ${text}`,
           },
         ],
@@ -69,7 +63,15 @@ ${text}`,
       return res.status(500).json({ error: "Empty response from API" });
     }
 
-    const parsed = JSON.parse(clean);
+    // Try to extract JSON if the model added extra text
+    let jsonStr = clean;
+    const bracketStart = clean.indexOf("[");
+    const bracketEnd = clean.lastIndexOf("]");
+    if (bracketStart !== -1 && bracketEnd !== -1 && bracketStart < bracketEnd) {
+      jsonStr = clean.substring(bracketStart, bracketEnd + 1);
+    }
+
+    const parsed = JSON.parse(jsonStr);
     const recipes = Array.isArray(parsed) ? parsed : [parsed];
     return res.status(200).json(recipes);
   } catch (e) {
