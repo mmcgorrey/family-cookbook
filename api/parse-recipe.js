@@ -13,13 +13,44 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured" });
   }
 
-  // Check if input is just a URL
-  const trimmed = text.trim();
-  const isUrl = /^https?:\/\/\S+$/i.test(trimmed);
+  let contentToParse = text.trim();
+
+  // If input looks like a URL, fetch the page first
+  const isUrl = /^https?:\/\/\S+$/i.test(contentToParse);
   if (isUrl) {
-    return res.status(400).json({ 
-      error: "URL detected — the parser can't visit websites. Please copy and paste the actual recipe text (ingredients, steps, etc.) from the page instead." 
-    });
+    try {
+      const pageResponse = await fetch(contentToParse, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; RecipeParser/1.0)",
+          "Accept": "text/html,application/xhtml+xml",
+        },
+      });
+      if (!pageResponse.ok) {
+        return res.status(400).json({ error: "Could not fetch that URL. Try copying and pasting the recipe text instead." });
+      }
+      const html = await pageResponse.text();
+      // Strip HTML tags and collapse whitespace
+      contentToParse = html
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+        .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
+        .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
+        .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&#\d+;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      // Limit to first 8000 chars to avoid token limits
+      if (contentToParse.length > 8000) {
+        contentToParse = contentToParse.substring(0, 8000);
+      }
+    } catch (e) {
+      return res.status(400).json({ error: "Failed to fetch URL: " + e.message + ". Try pasting the recipe text instead." });
+    }
   }
 
   try {
@@ -43,7 +74,7 @@ Each object needs: title, description, mealType ("Main"/"Side"/"Appetizer"/"Dess
 
 Output ONLY the JSON array, nothing else:
 
-${text}`,
+${contentToParse}`,
           },
         ],
       }),
@@ -63,7 +94,6 @@ ${text}`,
       return res.status(500).json({ error: "Empty response from API" });
     }
 
-    // Try to extract JSON if the model added extra text
     let jsonStr = clean;
     const bracketStart = clean.indexOf("[");
     const bracketEnd = clean.lastIndexOf("]");
