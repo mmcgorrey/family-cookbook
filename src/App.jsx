@@ -404,7 +404,7 @@ function ImportModal({onClose,onSave}) {
         body: JSON.stringify({ text: input }),
       });
       if (!response.ok) throw new Error("API request failed");
-      const recipe = await response.json();
+      const raw = await response.json(); const recipe = Array.isArray(raw) ? raw[0] : raw;
       setParsed(recipe);
       setStatus("preview");
     } catch(e) {
