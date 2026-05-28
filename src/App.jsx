@@ -4,7 +4,7 @@ import { db, collection, doc, setDoc, deleteDoc, onSnapshot } from "./firebase";
 // ─── Seed Data ───
 const SEED_RECIPES = [
   {
-    id: "r1", title: "Smoked Brisket", tags: ["Brisket BBQ", "Beef", "Weekend Project"],
+    id: "r1", title: "Smoked Brisket", mealType: "Main", tags: ["Brisket BBQ", "Proteins", "Weekend Project"],
     servings: 8, prepTime: "30 min", cookTime: "12-14 hrs",
     description: "Low and slow Texas-style brisket with a simple salt and pepper rub.",
     ingredients: [
@@ -28,7 +28,7 @@ const SEED_RECIPES = [
     cookCount: 0, lastCooked: null, notes: "", rating: 0, createdAt: Date.now(), source: "manual",
   },
   {
-    id: "r2", title: "Lemon Herb Grilled Chicken", tags: ["Chicken", "Grilling", "Quick Weeknight"],
+    id: "r2", title: "Lemon Herb Grilled Chicken", mealType: "Main", tags: ["Chicken", "Proteins", "Grilling", "Quick Weeknight"],
     servings: 4, prepTime: "15 min + 1 hr marinade", cookTime: "25 min",
     description: "Bright, herbaceous grilled chicken thighs — perfect for a weeknight.",
     ingredients: [
@@ -53,7 +53,7 @@ const SEED_RECIPES = [
     cookCount: 0, lastCooked: null, notes: "", rating: 0, createdAt: Date.now() - 100000, source: "manual",
   },
   {
-    id: "r3", title: "Homemade Pasta Bolognese", tags: ["Italian", "Beef", "Date Night", "Comfort Food"],
+    id: "r3", title: "Homemade Pasta Bolognese", mealType: "Main", tags: ["Italian", "Proteins", "Grains", "Date Night", "Comfort Food"],
     servings: 6, prepTime: "20 min", cookTime: "2 hrs",
     description: "Rich, meaty, slow-simmered Bolognese the way it should be made.",
     ingredients: [
@@ -88,11 +88,13 @@ const SEED_RECIPES = [
 
 const ALL_TAGS = [
   "Brisket BBQ","Beef","Chicken","Pork","Seafood","Vegetarian",
+  "Proteins","Greens","Grains",
   "Italian","Mexican","Asian","Grilling","Smoking",
   "Quick Weeknight","Weekend Project","Date Night","Comfort Food",
   "Healthy","Soup/Stew","Breakfast","Dessert","Appetizer",
 ];
 
+const MEAL_TYPES = ["Main","Side","Appetizer","Dessert","Drink"];
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
 
 // ─── Helpers ───
@@ -138,10 +140,12 @@ const css = {
   navBtn:(active)=>({ fontFamily:FONT_BODY, fontSize:13, fontWeight:500, padding:"7px 14px", borderRadius:6, border:"none", cursor:"pointer", background:active?theme.accent:"transparent", color:active?"#fff":theme.textMuted, transition:"all 0.15s" }),
   searchRow:{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" },
   input:{ fontFamily:FONT_BODY, fontSize:14, padding:"9px 12px", borderRadius:6, border:`1px solid ${theme.border}`, background:theme.surface, color:theme.text, outline:"none", flex:1, minWidth:180 },
+  select:{ fontFamily:FONT_BODY, fontSize:14, padding:"9px 12px", borderRadius:6, border:`1px solid ${theme.border}`, background:theme.surface, color:theme.text, outline:"none" },
   btn:(variant="default")=>({ fontFamily:FONT_BODY, fontSize:13, fontWeight:600, padding:"8px 16px", borderRadius:6, border:variant==="accent"?"none":`1px solid ${theme.border}`, cursor:"pointer", background:variant==="accent"?theme.accent:variant==="danger"?theme.red:variant==="blue"?theme.blue:"transparent", color:variant==="accent"||variant==="danger"||variant==="blue"?"#fff":theme.text, transition:"all 0.15s", whiteSpace:"nowrap" }),
   card:{ background:theme.surface, borderRadius:10, border:`1px solid ${theme.border}`, padding:18, marginBottom:10, cursor:"pointer", transition:"border-color 0.15s, background 0.15s" },
   cardTitle:{ fontFamily:FONT_DISPLAY, fontSize:18, fontWeight:600, margin:0 },
   tag:{ display:"inline-block", fontFamily:FONT_BODY, fontSize:11, fontWeight:500, padding:"3px 8px", borderRadius:4, background:theme.tagBg, border:`1px solid ${theme.tagBorder}`, color:theme.accentLight, marginRight:4, marginTop:4 },
+  mealTypeBadge:(type)=>({ display:"inline-block", fontFamily:FONT_BODY, fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:3, marginRight:8, textTransform:"uppercase", letterSpacing:"0.05em", background:type==="Main"?theme.accentBg:type==="Side"?theme.greenBg:type==="Dessert"?theme.goldBg:theme.blueBg, color:type==="Main"?theme.accent:type==="Side"?theme.green:type==="Dessert"?theme.gold:theme.blue }),
   meta:{ fontSize:12, color:theme.textMuted, marginTop:8 },
   section:{ marginBottom:20 },
   sectionTitle:{ fontFamily:FONT_DISPLAY, fontSize:15, fontWeight:600, color:theme.textMuted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 },
@@ -158,12 +162,20 @@ const css = {
 
 // ─── Components ───
 
-function TagFilter({activeTags,onToggle,allTags}) {
+function TagFilter({activeTags,onToggle,allTags,activeMealType,onMealTypeChange}) {
   return (
-    <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:16}}>
-      {(allTags||ALL_TAGS).map(t=>(
-        <button key={t} onClick={()=>onToggle(t)} style={{...css.tag,background:activeTags.includes(t)?theme.accentBg:theme.tagBg,borderColor:activeTags.includes(t)?theme.accent:theme.tagBorder,color:activeTags.includes(t)?theme.accent:theme.accentLight,cursor:"pointer"}}>{t}</button>
-      ))}
+    <div>
+      <div style={{display:"flex",gap:6,marginBottom:8}}>
+        <button onClick={()=>onMealTypeChange("")} style={{...css.btn(activeMealType===""?"accent":"default"),padding:"5px 12px",fontSize:12}}>All</button>
+        {MEAL_TYPES.map(t=>(
+          <button key={t} onClick={()=>onMealTypeChange(t)} style={{...css.btn(activeMealType===t?"accent":"default"),padding:"5px 12px",fontSize:12}}>{t}s</button>
+        ))}
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:16}}>
+        {(allTags||ALL_TAGS).map(t=>(
+          <button key={t} onClick={()=>onToggle(t)} style={{...css.tag,background:activeTags.includes(t)?theme.accentBg:theme.tagBg,borderColor:activeTags.includes(t)?theme.accent:theme.tagBorder,color:activeTags.includes(t)?theme.accent:theme.accentLight,cursor:"pointer"}}>{t}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -174,7 +186,10 @@ function RecipeCard({recipe,onClick}) {
       onMouseEnter={e=>{e.currentTarget.style.borderColor=theme.accent;e.currentTarget.style.background=theme.surfaceHover}}
       onMouseLeave={e=>{e.currentTarget.style.borderColor=theme.border;e.currentTarget.style.background=theme.surface}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-        <h3 style={css.cardTitle}>{recipe.title}</h3>
+        <div style={{display:"flex",alignItems:"center"}}>
+          {recipe.mealType&&<span style={css.mealTypeBadge(recipe.mealType)}>{recipe.mealType}</span>}
+          <h3 style={css.cardTitle}>{recipe.title}</h3>
+        </div>
         {recipe.cookCount>0&&<span style={css.badge(theme.greenBg,theme.green)}>Cooked {recipe.cookCount}×</span>}
       </div>
       <p style={{fontSize:13,color:theme.textMuted,margin:"6px 0 8px",lineHeight:1.5}}>{recipe.description}</p>
@@ -189,23 +204,36 @@ function RecipeCard({recipe,onClick}) {
   );
 }
 
-function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList}) {
+function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList,onEdit}) {
   const [servings,setServings]=useState(recipe.servings);
   const [notes,setNotes]=useState(recipe.notes);
-  const [editing,setEditing]=useState(false);
+  const [editingNotes,setEditingNotes]=useState(false);
+  const [confirmDelete,setConfirmDelete]=useState(false);
 
   const logCook=()=>onUpdate({...recipe,cookCount:recipe.cookCount+1,lastCooked:Date.now()});
-  const saveNotes=()=>{onUpdate({...recipe,notes});setEditing(false);};
+  const saveNotes=()=>{onUpdate({...recipe,notes});setEditingNotes(false);};
 
   return (
     <div>
       <button onClick={onBack} style={{...css.btn(),marginBottom:16,border:"none",padding:"4px 0",color:theme.accent}}>← Back to recipes</button>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
-        <h2 style={{fontFamily:FONT_DISPLAY,fontSize:26,margin:0}}>{recipe.title}</h2>
+        <div>
+          {recipe.mealType&&<span style={css.mealTypeBadge(recipe.mealType)}>{recipe.mealType}</span>}
+          <h2 style={{fontFamily:FONT_DISPLAY,fontSize:26,margin:0,display:"inline"}}>{recipe.title}</h2>
+        </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           <button onClick={logCook} style={css.btn("accent")}>🍳 Log Cook</button>
           <button onClick={()=>onAddToList(recipe)} style={css.btn()}>🛒 Add to List</button>
-          <button onClick={()=>onDelete(recipe.id)} style={css.btn("danger")}>Delete</button>
+          <button onClick={()=>onEdit(recipe)} style={css.btn("blue")}>✏️ Edit</button>
+          {confirmDelete?(
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <span style={{fontSize:12,color:theme.red}}>Sure?</span>
+              <button onClick={()=>onDelete(recipe.id)} style={css.btn("danger")}>Yes, Delete</button>
+              <button onClick={()=>setConfirmDelete(false)} style={css.btn()}>No</button>
+            </div>
+          ):(
+            <button onClick={()=>setConfirmDelete(true)} style={css.btn("danger")}>🗑 Delete</button>
+          )}
         </div>
       </div>
       <p style={{color:theme.textMuted,fontSize:14,margin:"8px 0 12px"}}>{recipe.description}</p>
@@ -240,16 +268,16 @@ function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList}) {
       )}
       <div style={css.section}>
         <h4 style={css.sectionTitle}>Cook Notes</h4>
-        {editing?(
+        {editingNotes?(
           <div>
             <textarea style={css.textarea} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="What worked? What didn't? Adjustments for next time..." />
             <div style={{display:"flex",gap:6,marginTop:8}}>
               <button onClick={saveNotes} style={css.btn("accent")}>Save</button>
-              <button onClick={()=>{setNotes(recipe.notes);setEditing(false)}} style={css.btn()}>Cancel</button>
+              <button onClick={()=>{setNotes(recipe.notes);setEditingNotes(false)}} style={css.btn()}>Cancel</button>
             </div>
           </div>
         ):(
-          <div onClick={()=>setEditing(true)} style={{padding:12,borderRadius:6,background:theme.surfaceHover,border:`1px solid ${theme.border}`,minHeight:50,cursor:"pointer",fontSize:14,color:recipe.notes?theme.text:theme.textMuted,lineHeight:1.6,whiteSpace:"pre-wrap"}}>
+          <div onClick={()=>setEditingNotes(true)} style={{padding:12,borderRadius:6,background:theme.surfaceHover,border:`1px solid ${theme.border}`,minHeight:50,cursor:"pointer",fontSize:14,color:recipe.notes?theme.text:theme.textMuted,lineHeight:1.6,whiteSpace:"pre-wrap"}}>
             {recipe.notes||"Click to add notes..."}
           </div>
         )}
@@ -258,8 +286,27 @@ function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList}) {
   );
 }
 
-function AddRecipeModal({onClose,onSave,allTags}) {
-  const [form,setForm]=useState({title:"",description:"",tags:[],servings:4,prepTime:"",cookTime:"",ingredientsText:"",stepsText:"",sidesText:"",drinksText:""});
+// Shared form for Add and Edit
+function RecipeFormModal({onClose,onSave,allTags,existingRecipe}) {
+  const isEdit = !!existingRecipe;
+  const [form,setForm]=useState(()=>{
+    if(isEdit){
+      return {
+        title:existingRecipe.title||"",
+        description:existingRecipe.description||"",
+        mealType:existingRecipe.mealType||"Main",
+        tags:existingRecipe.tags||[],
+        servings:existingRecipe.servings||4,
+        prepTime:existingRecipe.prepTime||"",
+        cookTime:existingRecipe.cookTime||"",
+        ingredientsText:(existingRecipe.ingredients||[]).map(i=>`${i.amount} ${i.unit} ${i.name}`).join("\n"),
+        stepsText:(existingRecipe.steps||[]).join("\n"),
+        sidesText:(existingRecipe.sides||[]).join(", "),
+        drinksText:(existingRecipe.drinks||[]).join(", "),
+      };
+    }
+    return {title:"",description:"",mealType:"Main",tags:[],servings:4,prepTime:"",cookTime:"",ingredientsText:"",stepsText:"",sidesText:"",drinksText:""};
+  });
   const set=(k,v)=>setForm(p=>({...p,[k]:v}));
   const toggleTag=(t)=>set("tags",form.tags.includes(t)?form.tags.filter(x=>x!==t):[...form.tags,t]);
   const [customTag,setCustomTag]=useState("");
@@ -267,8 +314,15 @@ function AddRecipeModal({onClose,onSave,allTags}) {
   const handleSave=()=>{
     if(!form.title.trim())return;
     const recipe={
-      id:uid(), title:form.title.trim(), description:form.description.trim(), tags:form.tags,
-      servings:Number(form.servings)||4, prepTime:form.prepTime.trim(), cookTime:form.cookTime.trim(),
+      ...(isEdit?existingRecipe:{}),
+      id:isEdit?existingRecipe.id:uid(),
+      title:form.title.trim(),
+      description:form.description.trim(),
+      mealType:form.mealType,
+      tags:form.tags,
+      servings:Number(form.servings)||4,
+      prepTime:form.prepTime.trim(),
+      cookTime:form.cookTime.trim(),
       ingredients:form.ingredientsText.split("\n").filter(Boolean).map(line=>{
         const match=line.match(/^([\d.\/]+)\s*(\w+)?\s+(.+)/);
         if(match)return{amount:parseFloat(match[1])||1,unit:match[2]||"pieces",name:match[3]};
@@ -277,7 +331,12 @@ function AddRecipeModal({onClose,onSave,allTags}) {
       steps:form.stepsText.split("\n").filter(Boolean).map(s=>s.replace(/^\d+[\.\)]\s*/,"")),
       sides:form.sidesText.split(",").map(s=>s.trim()).filter(Boolean),
       drinks:form.drinksText.split(",").map(s=>s.trim()).filter(Boolean),
-      cookCount:0,lastCooked:null,notes:"",rating:0,createdAt:Date.now(),source:"manual",
+      cookCount:isEdit?existingRecipe.cookCount:0,
+      lastCooked:isEdit?existingRecipe.lastCooked:null,
+      notes:isEdit?existingRecipe.notes:"",
+      rating:isEdit?existingRecipe.rating:0,
+      createdAt:isEdit?existingRecipe.createdAt:Date.now(),
+      source:isEdit?existingRecipe.source:"manual",
     };
     onSave(recipe);
     onClose();
@@ -289,10 +348,16 @@ function AddRecipeModal({onClose,onSave,allTags}) {
   return (
     <div style={css.modal} onClick={onClose}>
       <div style={css.modalContent} onClick={e=>e.stopPropagation()}>
-        <h3 style={{fontFamily:FONT_DISPLAY,fontSize:22,margin:"0 0 18px"}}>Add Recipe</h3>
+        <h3 style={{fontFamily:FONT_DISPLAY,fontSize:22,margin:"0 0 18px"}}>{isEdit?"Edit Recipe":"Add Recipe"}</h3>
         <div style={fieldStyle}><label style={labelStyle}>Title *</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.title} onChange={e=>set("title",e.target.value)} placeholder="E.g. Cast Iron Ribeye"/></div>
         <div style={fieldStyle}><label style={labelStyle}>Description</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Short summary"/></div>
         <div style={{display:"flex",gap:10,...fieldStyle}}>
+          <div style={{flex:1}}>
+            <label style={labelStyle}>Meal Type</label>
+            <select style={{...css.select,width:"100%",boxSizing:"border-box"}} value={form.mealType} onChange={e=>set("mealType",e.target.value)}>
+              {MEAL_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
           <div style={{flex:1}}><label style={labelStyle}>Servings</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} type="number" value={form.servings} onChange={e=>set("servings",e.target.value)}/></div>
           <div style={{flex:1}}><label style={labelStyle}>Prep Time</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.prepTime} onChange={e=>set("prepTime",e.target.value)} placeholder="15 min"/></div>
           <div style={{flex:1}}><label style={labelStyle}>Cook Time</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.cookTime} onChange={e=>set("cookTime",e.target.value)} placeholder="45 min"/></div>
@@ -315,7 +380,7 @@ function AddRecipeModal({onClose,onSave,allTags}) {
         <div style={fieldStyle}><label style={labelStyle}>Drink Pairings (comma separated)</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.drinksText} onChange={e=>set("drinksText",e.target.value)} placeholder="Cabernet Sauvignon, Old Fashioned"/></div>
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:18}}>
           <button onClick={onClose} style={css.btn()}>Cancel</button>
-          <button onClick={handleSave} style={css.btn("accent")}>Save Recipe</button>
+          <button onClick={handleSave} style={css.btn("accent")}>{isEdit?"Save Changes":"Save Recipe"}</button>
         </div>
       </div>
     </div>
@@ -352,6 +417,7 @@ function ImportModal({onClose,onSave}) {
     if(!parsed)return;
     const recipe={
       ...parsed, id:uid(), cookCount:0, lastCooked:null, notes:"", rating:0, createdAt:Date.now(), source:"import",
+      mealType:parsed.mealType||"Main",
       ingredients:parsed.ingredients||[], steps:parsed.steps||[], tags:parsed.tags||[],
       sides:parsed.sides||[], drinks:parsed.drinks||[],
       servings:parsed.servings||4, prepTime:parsed.prepTime||"", cookTime:parsed.cookTime||"",
@@ -364,7 +430,7 @@ function ImportModal({onClose,onSave}) {
     <div style={css.modal} onClick={onClose}>
       <div style={{...css.modalContent,maxWidth:560}} onClick={e=>e.stopPropagation()}>
         <h3 style={{fontFamily:FONT_DISPLAY,fontSize:22,margin:"0 0 6px"}}>Import Recipe</h3>
-        <p style={{fontSize:13,color:theme.textMuted,margin:"0 0 16px"}}>Paste a recipe URL or the full recipe text — AI will parse it into your cookbook.</p>
+        <p style={{fontSize:13,color:theme.textMuted,margin:"0 0 16px"}}>Paste a recipe URL or the full recipe text — AI will parse it into your cookbook. You can edit it after import.</p>
         <textarea style={{...css.textarea,minHeight:120}} value={input} onChange={e=>setInput(e.target.value)}
           placeholder={"Paste a recipe URL, or paste the full recipe text here.\n\nE.g.:\nhttps://example.com/recipe/chicken-tikka\n\nOr paste the full recipe with ingredients and steps..."} />
         {status==="error"&&<p style={{color:theme.red,fontSize:13,marginTop:8}}>{error}</p>}
@@ -376,6 +442,7 @@ function ImportModal({onClose,onSave}) {
               {parsed.servings} servings · {parsed.prepTime} prep · {parsed.cookTime} cook · {parsed.ingredients?.length||0} ingredients · {parsed.steps?.length||0} steps
             </div>
             <div>{parsed.tags?.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
+            <p style={{fontSize:11,color:theme.textMuted,marginTop:8}}>You can edit all details after importing.</p>
           </div>
         )}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}>
@@ -484,7 +551,7 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan}) {
             </div>
             {dayRecipes.map(r=>(
               <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",fontSize:14}}>
-                <span>{r.title}</span>
+                <span>{r.mealType&&<span style={{...css.mealTypeBadge(r.mealType),fontSize:9,padding:"1px 5px",marginRight:6}}>{r.mealType}</span>}{r.title}</span>
                 <span onClick={()=>removeFromPlan(day,r.id)} style={{cursor:"pointer",color:theme.red,fontSize:16,fontWeight:700,padding:"0 4px"}}>×</span>
               </div>
             ))}
@@ -497,6 +564,7 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan}) {
                     <div key={r.id} onClick={()=>addToPlan(day,r.id)} style={{padding:"6px 8px",cursor:"pointer",borderRadius:4,fontSize:14,transition:"background 0.1s"}}
                       onMouseEnter={e=>e.currentTarget.style.background=theme.surfaceHover}
                       onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      {r.mealType&&<span style={{...css.mealTypeBadge(r.mealType),fontSize:9,padding:"1px 5px",marginRight:6}}>{r.mealType}</span>}
                       {r.title} <span style={{fontSize:11,color:theme.textMuted}}>({r.tags.slice(0,2).join(", ")})</span>
                     </div>
                   ))}
@@ -517,19 +585,20 @@ export default function App() {
   const [selectedId,setSelectedId]=useState(null);
   const [search,setSearch]=useState("");
   const [activeTags,setActiveTags]=useState([]);
+  const [activeMealType,setActiveMealType]=useState("");
   const [showTagFilter,setShowTagFilter]=useState(false);
   const [showAdd,setShowAdd]=useState(false);
   const [showImport,setShowImport]=useState(false);
+  const [editingRecipe,setEditingRecipe]=useState(null);
   const [shoppingRecipes,setShoppingRecipes]=useState([]);
   const [mealPlan,setMealPlan]=useState({});
   const [loaded,setLoaded]=useState(false);
   const [saveStatus,setSaveStatus]=useState("");
 
-  // Real-time listener for recipes from Firestore
+  // Real-time listener for recipes
   useEffect(()=>{
     const unsub = onSnapshot(collection(db, "recipes"), (snapshot) => {
       if (snapshot.empty && !loaded) {
-        // First time: seed the database
         SEED_RECIPES.forEach(r => saveRecipeToDb(r));
         setRecipes(SEED_RECIPES);
       } else {
@@ -541,7 +610,6 @@ export default function App() {
     return () => unsub();
   },[]);
 
-  // Real-time listener for shopping list
   useEffect(()=>{
     const unsub = onSnapshot(doc(db, "app", "shopping"), (snap) => {
       if (snap.exists()) setShoppingRecipes(snap.data().items || []);
@@ -549,7 +617,6 @@ export default function App() {
     return () => unsub();
   },[]);
 
-  // Real-time listener for meal plan
   useEffect(()=>{
     const unsub = onSnapshot(doc(db, "app", "mealplan"), (snap) => {
       if (snap.exists()) setMealPlan(snap.data().days || {});
@@ -564,9 +631,10 @@ export default function App() {
     return recipes.filter(r=>{
       const matchSearch=!search||r.title.toLowerCase().includes(search.toLowerCase())||r.description?.toLowerCase().includes(search.toLowerCase())||r.ingredients?.some(i=>i.name.toLowerCase().includes(search.toLowerCase()));
       const matchTags=activeTags.length===0||activeTags.every(t=>r.tags?.includes(t));
-      return matchSearch&&matchTags;
+      const matchMealType=!activeMealType||r.mealType===activeMealType;
+      return matchSearch&&matchTags&&matchMealType;
     });
-  },[recipes,search,activeTags]);
+  },[recipes,search,activeTags,activeMealType]);
 
   const selected=selectedId?recipes.find(r=>r.id===selectedId):null;
 
@@ -582,6 +650,11 @@ export default function App() {
     saveRecipeToDb(recipe);
     setSaveStatus("Synced ✓");
     setTimeout(()=>setSaveStatus(""),2000);
+  };
+
+  const saveEditedRecipe=(recipe)=>{
+    updateRecipe(recipe);
+    setEditingRecipe(null);
   };
 
   const deleteRecipe=(id)=>{
@@ -630,9 +703,7 @@ export default function App() {
   };
 
   const handleResetData=async()=>{
-    // Delete all recipes from Firestore
     recipes.forEach(r=>deleteRecipeFromDb(r.id));
-    // Re-seed
     SEED_RECIPES.forEach(r=>saveRecipeToDb(r));
     clearShopping();
     updateMealPlan({});
@@ -661,14 +732,14 @@ export default function App() {
       </header>
 
       {selectedId&&selected?(
-        <RecipeDetail recipe={selected} onBack={()=>setSelectedId(null)} onUpdate={updateRecipe} onDelete={deleteRecipe} onAddToList={addToShoppingList}/>
+        <RecipeDetail recipe={selected} onBack={()=>setSelectedId(null)} onUpdate={updateRecipe} onDelete={deleteRecipe} onAddToList={addToShoppingList} onEdit={(r)=>setEditingRecipe(r)}/>
       ):view==="browse"?(
         <div>
           <div style={css.searchRow}>
             <input style={css.input} placeholder="Search recipes, ingredients..." value={search} onChange={e=>setSearch(e.target.value)}/>
-            <button style={css.btn(showTagFilter?"accent":"default")} onClick={()=>setShowTagFilter(p=>!p)}>🏷 Tags{activeTags.length>0?` (${activeTags.length})`:""}</button>
+            <button style={css.btn(showTagFilter?"accent":"default")} onClick={()=>setShowTagFilter(p=>!p)}>🏷 Filter{activeTags.length>0||activeMealType?` (${activeTags.length+(activeMealType?1:0)})`:""}</button>
           </div>
-          {showTagFilter&&<TagFilter activeTags={activeTags} onToggle={toggleTag} allTags={allTags}/>}
+          {showTagFilter&&<TagFilter activeTags={activeTags} onToggle={toggleTag} allTags={allTags} activeMealType={activeMealType} onMealTypeChange={setActiveMealType}/>}
           {filtered.length===0?(
             <div style={{textAlign:"center",padding:40,color:theme.textMuted}}><p style={{fontSize:28}}>🍽</p><p>No recipes match your search.</p></div>
           ):(filtered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>))}
@@ -679,7 +750,8 @@ export default function App() {
         <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan}/>
       )}
 
-      {showAdd&&<AddRecipeModal onClose={()=>setShowAdd(false)} onSave={addRecipe} allTags={allTags}/>}
+      {showAdd&&<RecipeFormModal onClose={()=>setShowAdd(false)} onSave={addRecipe} allTags={allTags}/>}
+      {editingRecipe&&<RecipeFormModal onClose={()=>setEditingRecipe(null)} onSave={saveEditedRecipe} allTags={allTags} existingRecipe={editingRecipe}/>}
       {showImport&&<ImportModal onClose={()=>setShowImport(false)} onSave={addRecipe}/>}
     </div>
   );
