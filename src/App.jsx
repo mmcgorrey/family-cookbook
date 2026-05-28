@@ -390,7 +390,8 @@ function RecipeFormModal({onClose,onSave,allTags,existingRecipe}) {
 function ImportModal({onClose,onSave}) {
   const [input,setInput]=useState("");
   const [status,setStatus]=useState("idle");
-  const [parsed,setParsed]=useState(null);
+  const [parsedList,setParsedList]=useState([]);
+  const [selected,setSelected]=useState({});
   const [error,setError]=useState("");
 
   const parseRecipe=async()=>{
@@ -403,9 +404,17 @@ function ImportModal({onClose,onSave}) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: input }),
       });
-      if (!response.ok) throw new Error("API request failed");
-      const raw = await response.json(); const recipe = Array.isArray(raw) ? raw[0] : raw;
-      setParsed(recipe);
+      const data = await response.json();
+      if (!response.ok) {
+        setError(data.error || "API request failed");
+        setStatus("error");
+        return;
+      }
+      const recipes = Array.isArray(data) ? data : [data];
+      setParsedList(recipes);
+      const sel = {};
+      recipes.forEach((_,idx) => sel[idx] = true);
+      setSelected(sel);
       setStatus("preview");
     } catch(e) {
       setError("Failed to parse recipe. Make sure the API is configured, or try the Manual add instead.");
@@ -413,45 +422,57 @@ function ImportModal({onClose,onSave}) {
     }
   };
 
+  const toggleSelect=(idx)=>setSelected(p=>({...p,[idx]:!p[idx]}));
+  const selectedCount=Object.values(selected).filter(Boolean).length;
+
   const handleImport=()=>{
-    if(!parsed)return;
-    const recipe={
-      ...parsed, id:uid(), cookCount:0, lastCooked:null, notes:"", rating:0, createdAt:Date.now(), source:"import",
-      mealType:parsed.mealType||"Main",
-      ingredients:parsed.ingredients||[], steps:parsed.steps||[], tags:parsed.tags||[],
-      sides:parsed.sides||[], drinks:parsed.drinks||[],
-      servings:parsed.servings||4, prepTime:parsed.prepTime||"", cookTime:parsed.cookTime||"",
-    };
-    onSave(recipe);
+    parsedList.forEach((parsed,idx)=>{
+      if(!selected[idx])return;
+      const recipe={
+        ...parsed, id:uid(), cookCount:0, lastCooked:null, notes:"", rating:0, createdAt:Date.now(), source:"import",
+        mealType:parsed.mealType||"Main",
+        ingredients:parsed.ingredients||[], steps:parsed.steps||[], tags:parsed.tags||[],
+        sides:parsed.sides||[], drinks:parsed.drinks||[],
+        servings:parsed.servings||4, prepTime:parsed.prepTime||"", cookTime:parsed.cookTime||"",
+      };
+      onSave(recipe);
+    });
     onClose();
   };
 
   return (
     <div style={css.modal} onClick={onClose}>
-      <div style={{...css.modalContent,maxWidth:560}} onClick={e=>e.stopPropagation()}>
-        <h3 style={{fontFamily:FONT_DISPLAY,fontSize:22,margin:"0 0 6px"}}>Import Recipe</h3>
-        <p style={{fontSize:13,color:theme.textMuted,margin:"0 0 16px"}}>Paste a recipe URL or the full recipe text — AI will parse it into your cookbook. You can edit it after import.</p>
+      <div style={{...css.modalContent,maxWidth:600}} onClick={e=>e.stopPropagation()}>
+        <h3 style={{fontFamily:FONT_DISPLAY,fontSize:22,margin:"0 0 6px"}}>Import Recipes</h3>
+        <p style={{fontSize:13,color:theme.textMuted,margin:"0 0 16px"}}>Paste recipe text with one or more dishes. The AI will split multiple dishes into separate cards.</p>
         <textarea style={{...css.textarea,minHeight:120}} value={input} onChange={e=>setInput(e.target.value)}
-          placeholder={"Paste a recipe URL, or paste the full recipe text here.\n\nE.g.:\nhttps://example.com/recipe/chicken-tikka\n\nOr paste the full recipe with ingredients and steps..."} />
+          placeholder={"Paste recipe text here (not URLs).\nMultiple dishes will be split into separate cards."} />
         {status==="error"&&<p style={{color:theme.red,fontSize:13,marginTop:8}}>{error}</p>}
-        {status==="preview"&&parsed&&(
-          <div style={{marginTop:16,padding:14,background:theme.surface,borderRadius:8,border:`1px solid ${theme.border}`}}>
-            <h4 style={{fontFamily:FONT_DISPLAY,fontSize:18,margin:"0 0 6px"}}>{parsed.title}</h4>
-            <p style={{fontSize:13,color:theme.textMuted,margin:"0 0 8px"}}>{parsed.description}</p>
-            <div style={{fontSize:12,color:theme.textMuted,marginBottom:8}}>
-              {parsed.servings} servings · {parsed.prepTime} prep · {parsed.cookTime} cook · {parsed.ingredients?.length||0} ingredients · {parsed.steps?.length||0} steps
-            </div>
-            <div>{parsed.tags?.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
-            <p style={{fontSize:11,color:theme.textMuted,marginTop:8}}>You can edit all details after importing.</p>
+        {status==="preview"&&parsedList.length>0&&(
+          <div style={{marginTop:16}}>
+            <div style={{fontSize:13,fontWeight:600,marginBottom:8}}>Found {parsedList.length} dish{parsedList.length!==1?"es":""}</div>
+            {parsedList.map((parsed,idx)=>(
+              <div key={idx} onClick={()=>toggleSelect(idx)} style={{marginBottom:8,padding:12,background:selected[idx]?theme.surfaceHover:theme.surface,borderRadius:8,border:"1px solid "+(selected[idx]?theme.accent:theme.border),cursor:"pointer"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:18,height:18,borderRadius:3,border:"2px solid "+(selected[idx]?theme.green:theme.border),background:selected[idx]?theme.greenBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:theme.green,flexShrink:0}}>{selected[idx]?"\u2713":""}</span>
+                  <div style={{flex:1}}>
+                    <span style={{fontFamily:FONT_DISPLAY,fontSize:16,fontWeight:600}}>{parsed.title}</span>
+                    <span style={{fontSize:10,marginLeft:8,padding:"2px 6px",borderRadius:3,background:theme.accentBg,color:theme.accent}}>{parsed.mealType||"Main"}</span>
+                    <p style={{fontSize:12,color:theme.textMuted,margin:"4px 0 0"}}>{parsed.description}</p>
+                    <div style={{fontSize:11,color:theme.textMuted,marginTop:4}}>{parsed.servings||0} srv | {(parsed.ingredients||[]).length} ingredients | {(parsed.steps||[]).length} steps</div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         )}
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}>
           <button onClick={onClose} style={css.btn()}>Cancel</button>
           {status==="preview"?(
-            <button onClick={handleImport} style={css.btn("accent")}>✓ Add to Cookbook</button>
+            <button onClick={handleImport} disabled={selectedCount===0} style={{...css.btn("accent"),opacity:selectedCount===0?0.5:1}}>Import {selectedCount} Dish{selectedCount!==1?"es":""}</button>
           ):(
             <button onClick={parseRecipe} disabled={status==="loading"||!input.trim()} style={{...css.btn("accent"),opacity:status==="loading"||!input.trim()?0.5:1}}>
-              {status==="loading"?"⏳ Parsing...":"🤖 Parse Recipe"}
+              {status==="loading"?"Parsing...":"Parse Recipes"}
             </button>
           )}
         </div>
