@@ -1,0 +1,603 @@
+import { useState, useEffect, useMemo } from "react";
+
+// ─── Storage helpers (localStorage for Vercel deploy) ───
+const STORAGE_KEY = "cookbook-recipes";
+const STORAGE_SHOP = "cookbook-shopping";
+const STORAGE_PLAN = "cookbook-mealplan";
+
+function loadData(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+function saveData(key, data) {
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) { console.error("Save failed:", e); }
+}
+
+// ─── Seed Data ───
+const SEED_RECIPES = [
+  {
+    id: "r1", title: "Smoked Brisket", tags: ["Brisket BBQ", "Beef", "Weekend Project"],
+    servings: 8, prepTime: "30 min", cookTime: "12-14 hrs",
+    description: "Low and slow Texas-style brisket with a simple salt and pepper rub.",
+    ingredients: [
+      { name: "Whole packer brisket", amount: 12, unit: "lb" },
+      { name: "Coarse black pepper", amount: 0.25, unit: "cup" },
+      { name: "Coarse kosher salt", amount: 0.25, unit: "cup" },
+      { name: "Garlic powder", amount: 2, unit: "tbsp" },
+      { name: "Oak or hickory wood chunks", amount: 4, unit: "pieces" },
+    ],
+    steps: [
+      "Trim brisket fat cap to about 1/4 inch.",
+      "Mix pepper, salt, and garlic powder. Coat brisket generously on all sides.",
+      "Set smoker to 225°F using oak or hickory.",
+      "Place brisket fat side up. Smoke until internal temp reaches 165°F (about 6-8 hours).",
+      "Wrap tightly in butcher paper. Return to smoker.",
+      "Cook until probe-tender and internal temp is 200-203°F.",
+      "Rest wrapped in a cooler for at least 1 hour before slicing against the grain.",
+    ],
+    sides: ["Coleslaw", "Mac and Cheese", "Pickles & Onions", "Potato Salad"],
+    drinks: ["Lone Star Beer", "Bourbon (neat)", "Sweet Tea"],
+    cookCount: 0, lastCooked: null, notes: "", rating: 0, createdAt: Date.now(), source: "manual",
+  },
+  {
+    id: "r2", title: "Lemon Herb Grilled Chicken", tags: ["Chicken", "Grilling", "Quick Weeknight"],
+    servings: 4, prepTime: "15 min + 1 hr marinade", cookTime: "25 min",
+    description: "Bright, herbaceous grilled chicken thighs — perfect for a weeknight.",
+    ingredients: [
+      { name: "Bone-in chicken thighs", amount: 8, unit: "pieces" },
+      { name: "Lemon juice", amount: 0.33, unit: "cup" },
+      { name: "Olive oil", amount: 0.25, unit: "cup" },
+      { name: "Garlic cloves, minced", amount: 4, unit: "pieces" },
+      { name: "Fresh rosemary, chopped", amount: 2, unit: "tbsp" },
+      { name: "Fresh thyme, chopped", amount: 1, unit: "tbsp" },
+      { name: "Salt", amount: 1, unit: "tsp" },
+      { name: "Black pepper", amount: 0.5, unit: "tsp" },
+    ],
+    steps: [
+      "Whisk lemon juice, olive oil, garlic, rosemary, thyme, salt and pepper.",
+      "Coat chicken thighs in marinade. Refrigerate at least 1 hour.",
+      "Heat grill to medium-high (400°F).",
+      "Grill chicken 6-7 minutes per side until internal temp hits 165°F.",
+      "Rest 5 minutes before serving.",
+    ],
+    sides: ["Grilled Asparagus", "Rice Pilaf", "Garden Salad"],
+    drinks: ["Sauvignon Blanc", "Lemonade", "Light Lager"],
+    cookCount: 0, lastCooked: null, notes: "", rating: 0, createdAt: Date.now() - 100000, source: "manual",
+  },
+  {
+    id: "r3", title: "Homemade Pasta Bolognese", tags: ["Italian", "Beef", "Date Night", "Comfort Food"],
+    servings: 6, prepTime: "20 min", cookTime: "2 hrs",
+    description: "Rich, meaty, slow-simmered Bolognese the way it should be made.",
+    ingredients: [
+      { name: "Ground beef (80/20)", amount: 1.5, unit: "lb" },
+      { name: "Pancetta, diced", amount: 4, unit: "oz" },
+      { name: "Yellow onion, finely diced", amount: 1, unit: "pieces" },
+      { name: "Carrots, finely diced", amount: 2, unit: "pieces" },
+      { name: "Celery stalks, finely diced", amount: 2, unit: "pieces" },
+      { name: "Garlic cloves, minced", amount: 4, unit: "pieces" },
+      { name: "Tomato paste", amount: 3, unit: "tbsp" },
+      { name: "San Marzano tomatoes (28oz can)", amount: 1, unit: "can" },
+      { name: "Dry red wine", amount: 1, unit: "cup" },
+      { name: "Whole milk", amount: 0.5, unit: "cup" },
+      { name: "Pappardelle or tagliatelle", amount: 1, unit: "lb" },
+      { name: "Parmesan, grated", amount: 0.5, unit: "cup" },
+    ],
+    steps: [
+      "Render pancetta in a Dutch oven over medium heat until crispy. Remove and set aside.",
+      "Brown ground beef in the pancetta fat. Remove and set aside.",
+      "Sauté onion, carrot, and celery in the same pot until softened, about 8 minutes.",
+      "Add garlic and tomato paste. Cook 2 minutes until paste darkens.",
+      "Deglaze with red wine, scraping up fond. Simmer until reduced by half.",
+      "Return beef and pancetta. Add crushed tomatoes and milk. Stir well.",
+      "Simmer low and slow for 1.5-2 hours, stirring occasionally.",
+      "Cook pasta to al dente. Toss with sauce. Top with Parmesan.",
+    ],
+    sides: ["Garlic Bread", "Caesar Salad", "Roasted Broccoli"],
+    drinks: ["Chianti Classico", "Barolo", "Negroni"],
+    cookCount: 0, lastCooked: null, notes: "", rating: 0, createdAt: Date.now() - 200000, source: "manual",
+  },
+];
+
+const ALL_TAGS = [
+  "Brisket BBQ","Beef","Chicken","Pork","Seafood","Vegetarian",
+  "Italian","Mexican","Asian","Grilling","Smoking",
+  "Quick Weeknight","Weekend Project","Date Night","Comfort Food",
+  "Healthy","Soup/Stew","Breakfast","Dessert","Appetizer",
+];
+
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+// ─── Helpers ───
+const fmtDate = (ts) => ts ? new Date(ts).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "Never";
+const uid = () => "r" + Math.random().toString(36).slice(2,9);
+const scaleAmt = (amount, base, target) => { const v = (amount/base)*target; return v%1===0?v:+v.toFixed(2); };
+
+// ─── Styles ───
+const FONT_DISPLAY = "'Playfair Display', Georgia, serif";
+const FONT_BODY = "'DM Sans', 'Segoe UI', sans-serif";
+
+const theme = {
+  bg:"#1a1714", surface:"#241f1b", surfaceHover:"#2e2824",
+  border:"#3a3330", borderLight:"#4a4038",
+  text:"#e8e0d6", textMuted:"#9a8e82",
+  accent:"#c8663e", accentLight:"#d4845f", accentBg:"rgba(200,102,62,0.12)",
+  green:"#6a9a5b", greenBg:"rgba(106,154,91,0.15)",
+  gold:"#c4a44e", goldBg:"rgba(196,164,78,0.12)",
+  red:"#b85450", blue:"#5b8ab5", blueBg:"rgba(91,138,181,0.15)",
+  tagBg:"rgba(200,102,62,0.1)", tagBorder:"rgba(200,102,62,0.25)",
+};
+
+const css = {
+  app:{ fontFamily:FONT_BODY, background:theme.bg, color:theme.text, minHeight:"100vh", maxWidth:900, margin:"0 auto", padding:"0 16px 80px" },
+  header:{ padding:"28px 0 20px", borderBottom:`1px solid ${theme.border}`, marginBottom:24 },
+  title:{ fontFamily:FONT_DISPLAY, fontSize:28, fontWeight:700, margin:0, color:theme.text, letterSpacing:"-0.02em" },
+  subtitle:{ fontFamily:FONT_BODY, fontSize:13, color:theme.textMuted, margin:"4px 0 0", fontWeight:400 },
+  nav:{ display:"flex", gap:6, marginTop:16, flexWrap:"wrap" },
+  navBtn:(active)=>({ fontFamily:FONT_BODY, fontSize:13, fontWeight:500, padding:"7px 14px", borderRadius:6, border:"none", cursor:"pointer", background:active?theme.accent:"transparent", color:active?"#fff":theme.textMuted, transition:"all 0.15s" }),
+  searchRow:{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap" },
+  input:{ fontFamily:FONT_BODY, fontSize:14, padding:"9px 12px", borderRadius:6, border:`1px solid ${theme.border}`, background:theme.surface, color:theme.text, outline:"none", flex:1, minWidth:180 },
+  btn:(variant="default")=>({ fontFamily:FONT_BODY, fontSize:13, fontWeight:600, padding:"8px 16px", borderRadius:6, border:variant==="accent"?"none":`1px solid ${theme.border}`, cursor:"pointer", background:variant==="accent"?theme.accent:variant==="danger"?theme.red:variant==="blue"?theme.blue:"transparent", color:variant==="accent"||variant==="danger"||variant==="blue"?"#fff":theme.text, transition:"all 0.15s", whiteSpace:"nowrap" }),
+  card:{ background:theme.surface, borderRadius:10, border:`1px solid ${theme.border}`, padding:18, marginBottom:10, cursor:"pointer", transition:"border-color 0.15s, background 0.15s" },
+  cardTitle:{ fontFamily:FONT_DISPLAY, fontSize:18, fontWeight:600, margin:0 },
+  tag:{ display:"inline-block", fontFamily:FONT_BODY, fontSize:11, fontWeight:500, padding:"3px 8px", borderRadius:4, background:theme.tagBg, border:`1px solid ${theme.tagBorder}`, color:theme.accentLight, marginRight:4, marginTop:4 },
+  meta:{ fontSize:12, color:theme.textMuted, marginTop:8 },
+  section:{ marginBottom:20 },
+  sectionTitle:{ fontFamily:FONT_DISPLAY, fontSize:15, fontWeight:600, color:theme.textMuted, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:10 },
+  ingredientRow:{ display:"flex", justifyContent:"space-between", padding:"6px 0", borderBottom:`1px solid ${theme.border}`, fontSize:14 },
+  stepRow:{ display:"flex", gap:12, marginBottom:12, fontSize:14, lineHeight:1.6 },
+  stepNum:{ fontFamily:FONT_DISPLAY, fontWeight:700, color:theme.accent, fontSize:16, minWidth:24 },
+  textarea:{ fontFamily:FONT_BODY, fontSize:14, padding:"9px 12px", borderRadius:6, border:`1px solid ${theme.border}`, background:theme.surface, color:theme.text, outline:"none", width:"100%", minHeight:70, resize:"vertical", boxSizing:"border-box" },
+  badge:(bg,color)=>({ display:"inline-flex", alignItems:"center", gap:4, fontSize:11, fontWeight:600, padding:"3px 8px", borderRadius:4, background:bg, color }),
+  pairingChip:{ display:"inline-block", fontSize:13, padding:"5px 10px", borderRadius:6, background:theme.surfaceHover, border:`1px solid ${theme.border}`, color:theme.text, marginRight:6, marginBottom:6 },
+  shopItem:(checked)=>({ display:"flex", alignItems:"center", gap:10, padding:"8px 0", borderBottom:`1px solid ${theme.border}`, fontSize:14, color:checked?theme.textMuted:theme.text, textDecoration:checked?"line-through":"none", cursor:"pointer" }),
+  modal:{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:1000, padding:16 },
+  modalContent:{ background:theme.bg, border:`1px solid ${theme.border}`, borderRadius:12, padding:24, width:"100%", maxWidth:520, maxHeight:"85vh", overflowY:"auto" },
+};
+
+// ─── Components ───
+
+function TagFilter({activeTags,onToggle,allTags}) {
+  return (
+    <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:16}}>
+      {(allTags||ALL_TAGS).map(t=>(
+        <button key={t} onClick={()=>onToggle(t)} style={{...css.tag,background:activeTags.includes(t)?theme.accentBg:theme.tagBg,borderColor:activeTags.includes(t)?theme.accent:theme.tagBorder,color:activeTags.includes(t)?theme.accent:theme.accentLight,cursor:"pointer"}}>{t}</button>
+      ))}
+    </div>
+  );
+}
+
+function RecipeCard({recipe,onClick}) {
+  return (
+    <div style={css.card} onClick={onClick}
+      onMouseEnter={e=>{e.currentTarget.style.borderColor=theme.accent;e.currentTarget.style.background=theme.surfaceHover}}
+      onMouseLeave={e=>{e.currentTarget.style.borderColor=theme.border;e.currentTarget.style.background=theme.surface}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+        <h3 style={css.cardTitle}>{recipe.title}</h3>
+        {recipe.cookCount>0&&<span style={css.badge(theme.greenBg,theme.green)}>Cooked {recipe.cookCount}×</span>}
+      </div>
+      <p style={{fontSize:13,color:theme.textMuted,margin:"6px 0 8px",lineHeight:1.5}}>{recipe.description}</p>
+      <div>{recipe.tags.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
+      <div style={css.meta}>
+        {recipe.prepTime&&<span>Prep: {recipe.prepTime}</span>}
+        {recipe.cookTime&&<span style={{marginLeft:12}}>Cook: {recipe.cookTime}</span>}
+        <span style={{marginLeft:12}}>Serves {recipe.servings}</span>
+        {recipe.lastCooked&&<span style={{marginLeft:12}}>Last: {fmtDate(recipe.lastCooked)}</span>}
+      </div>
+    </div>
+  );
+}
+
+function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList}) {
+  const [servings,setServings]=useState(recipe.servings);
+  const [notes,setNotes]=useState(recipe.notes);
+  const [editing,setEditing]=useState(false);
+
+  const logCook=()=>onUpdate({...recipe,cookCount:recipe.cookCount+1,lastCooked:Date.now()});
+  const saveNotes=()=>{onUpdate({...recipe,notes});setEditing(false);};
+
+  return (
+    <div>
+      <button onClick={onBack} style={{...css.btn(),marginBottom:16,border:"none",padding:"4px 0",color:theme.accent}}>← Back to recipes</button>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+        <h2 style={{fontFamily:FONT_DISPLAY,fontSize:26,margin:0}}>{recipe.title}</h2>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button onClick={logCook} style={css.btn("accent")}>🍳 Log Cook</button>
+          <button onClick={()=>onAddToList(recipe)} style={css.btn()}>🛒 Add to List</button>
+          <button onClick={()=>onDelete(recipe.id)} style={css.btn("danger")}>Delete</button>
+        </div>
+      </div>
+      <p style={{color:theme.textMuted,fontSize:14,margin:"8px 0 12px"}}>{recipe.description}</p>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>{recipe.tags.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
+      <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:20,fontSize:13,color:theme.textMuted}}>
+        <span>Prep: {recipe.prepTime}</span><span>Cook: {recipe.cookTime}</span>
+        <span>Cooked: {recipe.cookCount} time{recipe.cookCount!==1?"s":""}</span><span>Last: {fmtDate(recipe.lastCooked)}</span>
+      </div>
+      <div style={{...css.section,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:14,fontWeight:600}}>Servings:</span>
+        <button onClick={()=>setServings(Math.max(1,servings-1))} style={{...css.btn(),padding:"4px 10px"}}>−</button>
+        <span style={{fontSize:18,fontFamily:FONT_DISPLAY,fontWeight:700,minWidth:24,textAlign:"center"}}>{servings}</span>
+        <button onClick={()=>setServings(servings+1)} style={{...css.btn(),padding:"4px 10px"}}>+</button>
+        {servings!==recipe.servings&&<button onClick={()=>setServings(recipe.servings)} style={{fontSize:12,color:theme.accent,background:"none",border:"none",cursor:"pointer"}}>Reset</button>}
+      </div>
+      <div style={css.section}>
+        <h4 style={css.sectionTitle}>Ingredients</h4>
+        {recipe.ingredients.map((ing,i)=>(
+          <div key={i} style={css.ingredientRow}><span>{ing.name}</span><span style={{color:theme.accent,fontWeight:600}}>{scaleAmt(ing.amount,recipe.servings,servings)} {ing.unit}</span></div>
+        ))}
+      </div>
+      <div style={css.section}>
+        <h4 style={css.sectionTitle}>Instructions</h4>
+        {recipe.steps.map((s,i)=>(<div key={i} style={css.stepRow}><span style={css.stepNum}>{i+1}</span><span>{s}</span></div>))}
+      </div>
+      {(recipe.sides?.length>0||recipe.drinks?.length>0)&&(
+        <div style={css.section}>
+          <h4 style={css.sectionTitle}>Pairings</h4>
+          {recipe.sides?.length>0&&<div style={{marginBottom:8}}><span style={{fontSize:12,color:theme.textMuted,marginRight:8}}>Sides:</span>{recipe.sides.map((s,i)=><span key={i} style={css.pairingChip}>{s}</span>)}</div>}
+          {recipe.drinks?.length>0&&<div><span style={{fontSize:12,color:theme.textMuted,marginRight:8}}>Drinks:</span>{recipe.drinks.map((d,i)=><span key={i} style={css.pairingChip}>🥂 {d}</span>)}</div>}
+        </div>
+      )}
+      <div style={css.section}>
+        <h4 style={css.sectionTitle}>Cook Notes</h4>
+        {editing?(
+          <div>
+            <textarea style={css.textarea} value={notes} onChange={e=>setNotes(e.target.value)} placeholder="What worked? What didn't? Adjustments for next time..." />
+            <div style={{display:"flex",gap:6,marginTop:8}}>
+              <button onClick={saveNotes} style={css.btn("accent")}>Save</button>
+              <button onClick={()=>{setNotes(recipe.notes);setEditing(false)}} style={css.btn()}>Cancel</button>
+            </div>
+          </div>
+        ):(
+          <div onClick={()=>setEditing(true)} style={{padding:12,borderRadius:6,background:theme.surfaceHover,border:`1px solid ${theme.border}`,minHeight:50,cursor:"pointer",fontSize:14,color:recipe.notes?theme.text:theme.textMuted,lineHeight:1.6,whiteSpace:"pre-wrap"}}>
+            {recipe.notes||"Click to add notes..."}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AddRecipeModal({onClose,onSave,allTags}) {
+  const [form,setForm]=useState({title:"",description:"",tags:[],servings:4,prepTime:"",cookTime:"",ingredientsText:"",stepsText:"",sidesText:"",drinksText:""});
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const toggleTag=(t)=>set("tags",form.tags.includes(t)?form.tags.filter(x=>x!==t):[...form.tags,t]);
+  const [customTag,setCustomTag]=useState("");
+
+  const handleSave=()=>{
+    if(!form.title.trim())return;
+    const recipe={
+      id:uid(), title:form.title.trim(), description:form.description.trim(), tags:form.tags,
+      servings:Number(form.servings)||4, prepTime:form.prepTime.trim(), cookTime:form.cookTime.trim(),
+      ingredients:form.ingredientsText.split("\n").filter(Boolean).map(line=>{
+        const match=line.match(/^([\d.\/]+)\s*(\w+)?\s+(.+)/);
+        if(match)return{amount:parseFloat(match[1])||1,unit:match[2]||"pieces",name:match[3]};
+        return{amount:1,unit:"pieces",name:line.trim()};
+      }),
+      steps:form.stepsText.split("\n").filter(Boolean).map(s=>s.replace(/^\d+[\.\)]\s*/,"")),
+      sides:form.sidesText.split(",").map(s=>s.trim()).filter(Boolean),
+      drinks:form.drinksText.split(",").map(s=>s.trim()).filter(Boolean),
+      cookCount:0,lastCooked:null,notes:"",rating:0,createdAt:Date.now(),source:"manual",
+    };
+    onSave(recipe);
+    onClose();
+  };
+
+  const fieldStyle={marginBottom:14};
+  const labelStyle={display:"block",fontSize:12,fontWeight:600,color:theme.textMuted,marginBottom:4,textTransform:"uppercase",letterSpacing:"0.04em"};
+
+  return (
+    <div style={css.modal} onClick={onClose}>
+      <div style={css.modalContent} onClick={e=>e.stopPropagation()}>
+        <h3 style={{fontFamily:FONT_DISPLAY,fontSize:22,margin:"0 0 18px"}}>Add Recipe</h3>
+        <div style={fieldStyle}><label style={labelStyle}>Title *</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.title} onChange={e=>set("title",e.target.value)} placeholder="E.g. Cast Iron Ribeye"/></div>
+        <div style={fieldStyle}><label style={labelStyle}>Description</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.description} onChange={e=>set("description",e.target.value)} placeholder="Short summary"/></div>
+        <div style={{display:"flex",gap:10,...fieldStyle}}>
+          <div style={{flex:1}}><label style={labelStyle}>Servings</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} type="number" value={form.servings} onChange={e=>set("servings",e.target.value)}/></div>
+          <div style={{flex:1}}><label style={labelStyle}>Prep Time</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.prepTime} onChange={e=>set("prepTime",e.target.value)} placeholder="15 min"/></div>
+          <div style={{flex:1}}><label style={labelStyle}>Cook Time</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.cookTime} onChange={e=>set("cookTime",e.target.value)} placeholder="45 min"/></div>
+        </div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>Tags</label>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            {(allTags||ALL_TAGS).map(t=>(
+              <button key={t} onClick={()=>toggleTag(t)} style={{...css.tag,cursor:"pointer",background:form.tags.includes(t)?theme.accentBg:theme.tagBg,borderColor:form.tags.includes(t)?theme.accent:theme.tagBorder,color:form.tags.includes(t)?theme.accent:theme.accentLight}}>{t}</button>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:6,marginTop:6}}>
+            <input style={{...css.input,flex:1}} value={customTag} onChange={e=>setCustomTag(e.target.value)} placeholder="Custom tag..."/>
+            <button onClick={()=>{if(customTag.trim()){toggleTag(customTag.trim());setCustomTag("");}}} style={css.btn()}>Add</button>
+          </div>
+        </div>
+        <div style={fieldStyle}><label style={labelStyle}>Ingredients (one per line: "2 cups flour")</label><textarea style={{...css.textarea,minHeight:100}} value={form.ingredientsText} onChange={e=>set("ingredientsText",e.target.value)} placeholder={"2 cups all-purpose flour\n1 tsp salt\n3 large eggs"}/></div>
+        <div style={fieldStyle}><label style={labelStyle}>Steps (one per line)</label><textarea style={{...css.textarea,minHeight:100}} value={form.stepsText} onChange={e=>set("stepsText",e.target.value)} placeholder={"Preheat oven to 350°F\nMix dry ingredients"}/></div>
+        <div style={fieldStyle}><label style={labelStyle}>Side Dish Pairings (comma separated)</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.sidesText} onChange={e=>set("sidesText",e.target.value)} placeholder="Garlic Bread, Caesar Salad"/></div>
+        <div style={fieldStyle}><label style={labelStyle}>Drink Pairings (comma separated)</label><input style={{...css.input,width:"100%",boxSizing:"border-box"}} value={form.drinksText} onChange={e=>set("drinksText",e.target.value)} placeholder="Cabernet Sauvignon, Old Fashioned"/></div>
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:18}}>
+          <button onClick={onClose} style={css.btn()}>Cancel</button>
+          <button onClick={handleSave} style={css.btn("accent")}>Save Recipe</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImportModal({onClose,onSave}) {
+  const [input,setInput]=useState("");
+  const [status,setStatus]=useState("idle");
+  const [parsed,setParsed]=useState(null);
+  const [error,setError]=useState("");
+
+  const parseRecipe=async()=>{
+    if(!input.trim())return;
+    setStatus("loading");
+    setError("");
+    try {
+      const response = await fetch("/api/parse-recipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: input }),
+      });
+      if (!response.ok) throw new Error("API request failed");
+      const recipe = await response.json();
+      setParsed(recipe);
+      setStatus("preview");
+    } catch(e) {
+      setError("Failed to parse recipe. Make sure the API is configured, or try the Manual add instead.");
+      setStatus("error");
+    }
+  };
+
+  const handleImport=()=>{
+    if(!parsed)return;
+    const recipe={
+      ...parsed, id:uid(), cookCount:0, lastCooked:null, notes:"", rating:0, createdAt:Date.now(), source:"import",
+      ingredients:parsed.ingredients||[], steps:parsed.steps||[], tags:parsed.tags||[],
+      sides:parsed.sides||[], drinks:parsed.drinks||[],
+      servings:parsed.servings||4, prepTime:parsed.prepTime||"", cookTime:parsed.cookTime||"",
+    };
+    onSave(recipe);
+    onClose();
+  };
+
+  return (
+    <div style={css.modal} onClick={onClose}>
+      <div style={{...css.modalContent,maxWidth:560}} onClick={e=>e.stopPropagation()}>
+        <h3 style={{fontFamily:FONT_DISPLAY,fontSize:22,margin:"0 0 6px"}}>Import Recipe</h3>
+        <p style={{fontSize:13,color:theme.textMuted,margin:"0 0 16px"}}>Paste a recipe URL or the full recipe text — AI will parse it into your cookbook.</p>
+
+        <textarea style={{...css.textarea,minHeight:120}} value={input} onChange={e=>setInput(e.target.value)}
+          placeholder={"Paste a recipe URL, or paste the full recipe text here.\n\nE.g.:\nhttps://example.com/recipe/chicken-tikka\n\nOr paste the full recipe with ingredients and steps..."} />
+
+        {status==="error"&&<p style={{color:theme.red,fontSize:13,marginTop:8}}>{error}</p>}
+
+        {status==="preview"&&parsed&&(
+          <div style={{marginTop:16,padding:14,background:theme.surface,borderRadius:8,border:`1px solid ${theme.border}`}}>
+            <h4 style={{fontFamily:FONT_DISPLAY,fontSize:18,margin:"0 0 6px"}}>{parsed.title}</h4>
+            <p style={{fontSize:13,color:theme.textMuted,margin:"0 0 8px"}}>{parsed.description}</p>
+            <div style={{fontSize:12,color:theme.textMuted,marginBottom:8}}>
+              {parsed.servings} servings · {parsed.prepTime} prep · {parsed.cookTime} cook · {parsed.ingredients?.length||0} ingredients · {parsed.steps?.length||0} steps
+            </div>
+            <div>{parsed.tags?.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
+          </div>
+        )}
+
+        <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}>
+          <button onClick={onClose} style={css.btn()}>Cancel</button>
+          {status==="preview"?(
+            <button onClick={handleImport} style={css.btn("accent")}>✓ Add to Cookbook</button>
+          ):(
+            <button onClick={parseRecipe} disabled={status==="loading"||!input.trim()} style={{...css.btn("accent"),opacity:status==="loading"||!input.trim()?0.5:1}}>
+              {status==="loading"?"⏳ Parsing...":"🤖 Parse Recipe"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShoppingList({recipes,shoppingRecipes,onRemove,onClear}) {
+  const [checked,setChecked]=useState({});
+  const items=useMemo(()=>{
+    const map={};
+    shoppingRecipes.forEach(({id,servings:targetServings})=>{
+      const r=recipes.find(x=>x.id===id);
+      if(!r)return;
+      const scale=(targetServings||r.servings)/r.servings;
+      r.ingredients.forEach(ing=>{
+        const key=`${ing.name.toLowerCase()}|${ing.unit}`;
+        if(!map[key])map[key]={name:ing.name,unit:ing.unit,amount:0,from:[]};
+        map[key].amount+=ing.amount*scale;
+        if(!map[key].from.includes(r.title))map[key].from.push(r.title);
+      });
+    });
+    return Object.values(map).map(item=>({...item,amount:item.amount%1===0?item.amount:+item.amount.toFixed(2)}));
+  },[recipes,shoppingRecipes]);
+
+  const toggle=(i)=>setChecked(p=>({...p,[i]:!p[i]}));
+  const allChecked=items.length>0&&items.every((_,i)=>checked[i]);
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <h3 style={{fontFamily:FONT_DISPLAY,fontSize:20,margin:0}}>Shopping List</h3>
+        {items.length>0&&<button onClick={onClear} style={css.btn("danger")}>Clear All</button>}
+      </div>
+      {shoppingRecipes.length>0&&(
+        <div style={{marginBottom:16}}>
+          <span style={{fontSize:12,color:theme.textMuted,textTransform:"uppercase",letterSpacing:"0.04em"}}>Recipes in list:</span>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+            {shoppingRecipes.map(({id,servings:s})=>{
+              const r=recipes.find(x=>x.id===id);
+              return r?(<span key={id} style={{...css.pairingChip,display:"flex",alignItems:"center",gap:6}}>{r.title} ({s} srv)<span onClick={()=>onRemove(id)} style={{cursor:"pointer",color:theme.red,fontWeight:700}}>×</span></span>):null;
+            })}
+          </div>
+        </div>
+      )}
+      {items.length===0?(
+        <div style={{textAlign:"center",padding:40,color:theme.textMuted}}>
+          <p style={{fontSize:24,margin:"0 0 8px"}}>🛒</p>
+          <p>No items yet. Open a recipe and tap "Add to List" to get started.</p>
+        </div>
+      ):(
+        <div>
+          {allChecked&&<div style={{...css.badge(theme.greenBg,theme.green),marginBottom:12,padding:"8px 12px",fontSize:14}}>✓ All items checked off!</div>}
+          {items.map((item,i)=>(
+            <div key={i} style={css.shopItem(checked[i])} onClick={()=>toggle(i)}>
+              <span style={{width:20,height:20,borderRadius:4,border:`2px solid ${checked[i]?theme.green:theme.border}`,background:checked[i]?theme.greenBg:"transparent",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:theme.green,flexShrink:0}}>{checked[i]&&"✓"}</span>
+              <div style={{flex:1}}><span style={{fontWeight:500}}>{item.name}</span><span style={{color:theme.textMuted,fontSize:12,marginLeft:6}}>({item.from.join(", ")})</span></div>
+              <span style={{fontWeight:600,color:theme.accent}}>{item.amount} {item.unit}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan}) {
+  const [addingDay,setAddingDay]=useState(null);
+  const [search,setSearch]=useState("");
+  const filteredRecipes=recipes.filter(r=>!search||r.title.toLowerCase().includes(search.toLowerCase()));
+
+  const addToPlan=(day,recipeId)=>{
+    setMealPlan(p=>{const u={...p};if(!u[day])u[day]=[];if(!u[day].includes(recipeId))u[day]=[...u[day],recipeId];return u;});
+    setAddingDay(null);setSearch("");
+  };
+  const removeFromPlan=(day,recipeId)=>{setMealPlan(p=>{const u={...p};u[day]=(u[day]||[]).filter(id=>id!==recipeId);return u;});};
+  const clearPlan=()=>setMealPlan({});
+  const allPlannedIds=[...new Set(Object.values(mealPlan).flat())];
+
+  return (
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+        <h3 style={{fontFamily:FONT_DISPLAY,fontSize:20,margin:0}}>Meal Planner</h3>
+        <div style={{display:"flex",gap:6}}>
+          {allPlannedIds.length>0&&<button onClick={()=>onAddToShoppingFromPlan(allPlannedIds)} style={css.btn("accent")}>🛒 Shopping List for Week</button>}
+          <button onClick={clearPlan} style={css.btn()}>Clear Week</button>
+        </div>
+      </div>
+      {DAYS.map(day=>{
+        const dayRecipes=(mealPlan[day]||[]).map(id=>recipes.find(r=>r.id===id)).filter(Boolean);
+        return (
+          <div key={day} style={{marginBottom:12,padding:14,background:theme.surface,borderRadius:8,border:`1px solid ${theme.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:dayRecipes.length?8:0}}>
+              <span style={{fontFamily:FONT_DISPLAY,fontSize:15,fontWeight:600}}>{day}</span>
+              <button onClick={()=>setAddingDay(addingDay===day?null:day)} style={{...css.btn(),padding:"4px 10px",fontSize:12}}>{addingDay===day?"Cancel":"+ Add"}</button>
+            </div>
+            {dayRecipes.map(r=>(
+              <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",fontSize:14}}>
+                <span>{r.title}</span>
+                <span onClick={()=>removeFromPlan(day,r.id)} style={{cursor:"pointer",color:theme.red,fontSize:16,fontWeight:700,padding:"0 4px"}}>×</span>
+              </div>
+            ))}
+            {dayRecipes.length===0&&addingDay!==day&&<span style={{fontSize:13,color:theme.textMuted}}>No meals planned</span>}
+            {addingDay===day&&(
+              <div style={{marginTop:8,padding:10,background:theme.bg,borderRadius:6,border:`1px solid ${theme.border}`}}>
+                <input style={{...css.input,width:"100%",boxSizing:"border-box",marginBottom:6}} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search recipes..."/>
+                <div style={{maxHeight:180,overflowY:"auto"}}>
+                  {filteredRecipes.length===0?<span style={{fontSize:13,color:theme.textMuted}}>No matches</span>:filteredRecipes.map(r=>(
+                    <div key={r.id} onClick={()=>addToPlan(day,r.id)} style={{padding:"6px 8px",cursor:"pointer",borderRadius:4,fontSize:14,transition:"background 0.1s"}}
+                      onMouseEnter={e=>e.currentTarget.style.background=theme.surfaceHover}
+                      onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                      {r.title} <span style={{fontSize:11,color:theme.textMuted}}>({r.tags.slice(0,2).join(", ")})</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── App ───
+export default function App() {
+  const [recipes,setRecipes]=useState(()=>loadData(STORAGE_KEY,SEED_RECIPES));
+  const [view,setView]=useState("browse");
+  const [selectedId,setSelectedId]=useState(null);
+  const [search,setSearch]=useState("");
+  const [activeTags,setActiveTags]=useState([]);
+  const [showTagFilter,setShowTagFilter]=useState(false);
+  const [showAdd,setShowAdd]=useState(false);
+  const [showImport,setShowImport]=useState(false);
+  const [shoppingRecipes,setShoppingRecipes]=useState(()=>loadData(STORAGE_SHOP,[]));
+  const [mealPlan,setMealPlan]=useState(()=>loadData(STORAGE_PLAN,{}));
+  const [saveStatus,setSaveStatus]=useState("");
+
+  // Auto-save
+  useEffect(()=>{saveData(STORAGE_KEY,recipes);setSaveStatus("Saved ✓");const t=setTimeout(()=>setSaveStatus(""),2000);return()=>clearTimeout(t);},[recipes]);
+  useEffect(()=>{saveData(STORAGE_SHOP,shoppingRecipes);},[shoppingRecipes]);
+  useEffect(()=>{saveData(STORAGE_PLAN,mealPlan);},[mealPlan]);
+
+  const toggleTag=(t)=>setActiveTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+  const allTags=useMemo(()=>{const s=new Set(ALL_TAGS);recipes.forEach(r=>r.tags?.forEach(t=>s.add(t)));return[...s];},[recipes]);
+
+  const filtered=useMemo(()=>{
+    return recipes.filter(r=>{
+      const matchSearch=!search||r.title.toLowerCase().includes(search.toLowerCase())||r.description?.toLowerCase().includes(search.toLowerCase())||r.ingredients?.some(i=>i.name.toLowerCase().includes(search.toLowerCase()));
+      const matchTags=activeTags.length===0||activeTags.every(t=>r.tags?.includes(t));
+      return matchSearch&&matchTags;
+    });
+  },[recipes,search,activeTags]);
+
+  const selected=selectedId?recipes.find(r=>r.id===selectedId):null;
+  const updateRecipe=(updated)=>setRecipes(p=>p.map(r=>r.id===updated.id?updated:r));
+  const deleteRecipe=(id)=>{setRecipes(p=>p.filter(r=>r.id!==id));setSelectedId(null);};
+  const addToShoppingList=(recipe)=>{
+    if(!shoppingRecipes.find(s=>s.id===recipe.id))setShoppingRecipes(p=>[...p,{id:recipe.id,servings:recipe.servings}]);
+    setView("shop");
+  };
+  const addToShoppingFromPlan=(ids)=>{
+    setShoppingRecipes(prev=>{let u=[...prev];ids.forEach(id=>{if(!u.find(s=>s.id===id)){const r=recipes.find(x=>x.id===id);if(r)u.push({id,servings:r.servings});}});return u;});
+    setView("shop");
+  };
+  const handleResetData=()=>{setRecipes(SEED_RECIPES);setShoppingRecipes([]);setMealPlan({});};
+
+  return (
+    <div style={css.app}>
+      <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+      <header style={css.header}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <h1 style={css.title}>🍳 The Family Cookbook</h1>
+            <p style={css.subtitle}>{recipes.length} recipes — your kitchen, your rules {saveStatus&&<span style={{color:theme.green,marginLeft:8}}>{saveStatus}</span>}</p>
+          </div>
+          <button onClick={handleResetData} style={{...css.btn(),fontSize:11,padding:"4px 8px",color:theme.textMuted,border:"none"}} title="Reset to seed data">Reset</button>
+        </div>
+        <nav style={css.nav}>
+          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"}].map(({k,l})=>(
+            <button key={k} style={css.navBtn(view===k&&!selectedId)} onClick={()=>{setView(k);setSelectedId(null);}}>{l}</button>
+          ))}
+          <button style={css.navBtn(false)} onClick={()=>setShowImport(true)}>🤖 Import</button>
+          <button style={css.navBtn(false)} onClick={()=>setShowAdd(true)}>+ Manual</button>
+        </nav>
+      </header>
+
+      {selectedId&&selected?(
+        <RecipeDetail recipe={selected} onBack={()=>setSelectedId(null)} onUpdate={updateRecipe} onDelete={deleteRecipe} onAddToList={addToShoppingList}/>
+      ):view==="browse"?(
+        <div>
+          <div style={css.searchRow}>
+            <input style={css.input} placeholder="Search recipes, ingredients..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            <button style={css.btn(showTagFilter?"accent":"default")} onClick={()=>setShowTagFilter(p=>!p)}>🏷 Tags{activeTags.length>0?` (${activeTags.length})`:""}</button>
+          </div>
+          {showTagFilter&&<TagFilter activeTags={activeTags} onToggle={toggleTag} allTags={allTags}/>}
+          {filtered.length===0?(
+            <div style={{textAlign:"center",padding:40,color:theme.textMuted}}><p style={{fontSize:28}}>🍽</p><p>No recipes match your search.</p></div>
+          ):(filtered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>))}
+        </div>
+      ):view==="shop"?(
+        <ShoppingList recipes={recipes} shoppingRecipes={shoppingRecipes} onRemove={id=>setShoppingRecipes(p=>p.filter(s=>s.id!==id))} onClear={()=>setShoppingRecipes([])}/>
+      ):(
+        <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={setMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan}/>
+      )}
+
+      {showAdd&&<AddRecipeModal onClose={()=>setShowAdd(false)} onSave={r=>setRecipes(p=>[r,...p])} allTags={allTags}/>}
+      {showImport&&<ImportModal onClose={()=>setShowImport(false)} onSave={r=>setRecipes(p=>[r,...p])}/>}
+    </div>
+  );
+}
