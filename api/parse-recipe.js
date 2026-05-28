@@ -50,13 +50,24 @@ ${text}`,
       }),
     });
 
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Anthropic API error:", response.status, errText);
+      return res.status(500).json({ error: "Anthropic API returned an error: " + response.status });
+    }
+
     const data = await response.json();
     const raw = data.content?.map((c) => c.text || "").join("") || "";
     const clean = raw.replace(/```json|```/g, "").trim();
+    
+    if (!clean) {
+      return res.status(500).json({ error: "Empty response from API" });
+    }
+
     const recipe = JSON.parse(clean);
     return res.status(200).json(recipe);
   } catch (e) {
     console.error("Parse error:", e);
-    return res.status(500).json({ error: "Failed to parse recipe" });
+    return res.status(500).json({ error: "Failed to parse recipe: " + e.message });
   }
 }
