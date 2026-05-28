@@ -676,7 +676,7 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
                 ))}
                 <div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap"}}>
                   <button onClick={()=>onAddToShoppingFromCollection(col.recipeIds)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:"#c8663e",color:"#fff"}}>🛒 Shopping List</button>
-                  <button onClick={()=>onAddToPlanFromCollection(col)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"transparent",color:"#e8e0d6"}}>📅 Add to Planner</button>
+                  <select onChange={e=>{if(e.target.value)onAddToPlanFromCollection(col,e.target.value);e.target.value="";}} defaultValue="" style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"#1a1714",color:"#e8e0d6"}}><option value="" disabled>📅 Add to Day...</option><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option><option value="Sunday">Sunday</option></select>
                   <button onClick={()=>startEdit(col)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"transparent",color:"#e8e0d6"}}>✏️ Edit</button>
                   <button onClick={()=>onDelete(col.id)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:"#b85450",color:"#fff"}}>Delete</button>
                 </div>
@@ -891,13 +891,12 @@ export default function App() {
     setView("shop");
   };
 
-  const addToPlanFromCollection=(col)=>{
-    const today=DAYS[new Date().getDay()===0?6:new Date().getDay()-1];
+  const addToPlanFromCollection=(col,day)=>{
     updateMealPlan(prev=>{
       const u={...prev};
-      if(!u[today])u[today]=[];
+      if(!u[day])u[day]=[];
       col.recipeIds.forEach(id=>{
-        if(!u[today].includes(id))u[today]=[...u[today],id];
+        if(!u[day].includes(id))u[day]=[...u[day],id];
       });
       return u;
     });
