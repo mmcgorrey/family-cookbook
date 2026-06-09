@@ -208,7 +208,7 @@ function RecipeCard({recipe,onClick}) {
           {recipe.mealType&&<span style={css.mealTypeBadge(recipe.mealType)}>{recipe.mealType}</span>}
           <h3 style={css.cardTitle}>{recipe.title}</h3>
         </div>
-        <div style={{display:"flex",gap:4}}>{recipe.goTo&&<span style={css.badge(theme.goldBg,theme.gold)}>⭐ Go-To</span>}{recipe.cookCount>0&&<span style={css.badge(theme.greenBg,theme.green)}>Cooked {recipe.cookCount}×</span>}</div>
+        {recipe.cookCount>0&&<span style={css.badge(theme.greenBg,theme.green)}>Cooked {recipe.cookCount}×</span>}
       </div>
       <p style={{fontSize:13,color:theme.textMuted,margin:"6px 0 8px",lineHeight:1.5}}>{recipe.description}</p>
       <div>{recipe.tags.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
@@ -243,7 +243,6 @@ function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList,onEdit}) {
           <h2 style={{fontFamily:FONT_DISPLAY,fontSize:26,margin:0,display:"inline"}}>{recipe.title}</h2>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          <button onClick={()=>onUpdate({...recipe,goTo:!recipe.goTo})} style={{...css.btn(recipe.goTo?"accent":"default"),background:recipe.goTo?"#c4a44e":"transparent",color:recipe.goTo?"#fff":"#e8e0d6"}}>{recipe.goTo?"⭐ Go-To":"☆ Mark Go-To"}</button>
           <button onClick={logCook} style={css.btn("accent")}>🍳 Log Cook</button>
           <button onClick={()=>onAddToList(recipe)} style={css.btn()}>🛒 Add to List</button>
           <button onClick={()=>onEdit(recipe)} style={css.btn("blue")}>✏️ Edit</button>
@@ -661,7 +660,7 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan,onVie
 
 // ─── Collections ───
 
-function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCollection,onAddToPlanFromCollection,onViewRecipe}) {
+function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCollection,onAddToPlanFromCollection,onViewRecipe,goToOnly}) {
   const [showCreate,setShowCreate]=useState(false);
   const [editingCol,setEditingCol]=useState(null);
   const [name,setName]=useState("");
@@ -713,7 +712,11 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
           <div key={col.id} style={{marginBottom:10,background:"#1a1714",borderRadius:10,border:"1px solid #3a3330",padding:16}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",cursor:"pointer"}} onClick={()=>setExpandedCol(isExpanded?null:col.id)}>
               <div>
-                <h4 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:17,margin:0}}>{col.name}</h4>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <h4 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:17,margin:0}}>{col.name}</h4>
+                  {col.goTo&&<span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:3,background:"rgba(196,164,78,0.12)",color:"#c4a44e"}}>GO-TO</span>}
+                </div>
+                <div style={{marginTop:4}}><StarRating rating={col.rating||0} onRate={r=>{onSave({...col,rating:r})}} size={16}/></div>
                 {col.description&&<p style={{fontSize:13,color:"#9a8e82",margin:"4px 0 0"}}>{col.description}</p>}
                 <div style={{fontSize:12,color:"#9a8e82",marginTop:4}}>{colRecipes.length} recipe{colRecipes.length!==1?"s":""}</div>
               </div>
@@ -730,6 +733,7 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
                 <div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap"}}>
                   <button onClick={()=>onAddToShoppingFromCollection(col.recipeIds)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:"#c8663e",color:"#fff"}}>🛒 Shopping List</button>
                   <select onChange={e=>{if(e.target.value)onAddToPlanFromCollection(col,e.target.value);e.target.value="";}} defaultValue="" style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"#1a1714",color:"#e8e0d6"}}><option value="" disabled>📅 Add to Day...</option><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option><option value="Sunday">Sunday</option></select>
+                  <button onClick={()=>onSave({...col,goTo:!col.goTo})} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:col.goTo?"#c4a44e":"transparent",color:col.goTo?"#fff":"#e8e0d6",borderWidth:1,borderStyle:"solid",borderColor:col.goTo?"#c4a44e":"#3a3330"}}>{col.goTo?"⭐ Go-To":"☆ Mark Go-To"}</button>
                   <button onClick={()=>startEdit(col)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"transparent",color:"#e8e0d6"}}>✏️ Edit</button>
                   <button onClick={()=>onDelete(col.id)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:"#b85450",color:"#fff"}}>Delete</button>
                 </div>
@@ -982,7 +986,7 @@ export default function App() {
 
         </div>
         <nav style={css.nav}>
-          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"},{k:"goto",l:"⭐ Go-To ("+recipes.filter(r=>r.goTo).length+")"},{k:"collections",l:"📚 Collections"}].map(({k,l})=>(
+          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"},{k:"goto",l:"⭐ Go-To ("+collections.filter(col=>col.goTo).length+"/14)"},{k:"collections",l:"📚 Collections"}].map(({k,l})=>(
             <button key={k} style={css.navBtn(view===k&&!selectedId)} onClick={()=>{setView(k);setSelectedId(null);}}>{l}</button>
           ))}
           <button style={css.navBtn(false)} onClick={()=>setShowImport(true)}>🤖 Import</button>
@@ -1017,10 +1021,12 @@ export default function App() {
         <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}}/>
       ):view==="goto"?(
         <div>
-          <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:20,margin:"0 0 16px"}}>Our Go-To Recipes <span style={{fontSize:14,color:"#9a8e82",fontWeight:400}}>({recipes.filter(r=>r.goTo).length}/14)</span></h3>
-          {recipes.filter(r=>r.goTo).length===0?(
-            <div style={{textAlign:"center",padding:40,color:"#9a8e82"}}><p style={{fontSize:24}}>\u2b50</p><p>No go-to recipes yet. Open a recipe and tap "Mark Go-To" to add it here.</p></div>
-          ):(recipes.filter(r=>r.goTo).map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>))}
+          <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:20,margin:"0 0 16px"}}>Our Go-To Meals <span style={{fontSize:14,color:"#9a8e82",fontWeight:400}}>({collections.filter(col=>col.goTo).length}/14)</span></h3>
+          {collections.filter(col=>col.goTo).length===0?(
+            <div style={{textAlign:"center",padding:40,color:"#9a8e82"}}><p style={{fontSize:24}}>{"⭐"}</p><p>No go-to meals yet. Go to Collections and mark your favorites.</p></div>
+          ):(
+            <Collections recipes={recipes} collections={collections.filter(col=>col.goTo)} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}} goToOnly={true}/>
+          )}
         </div>
       ):view==="collections"?(
         <Collections recipes={recipes} collections={collections} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}}/>
