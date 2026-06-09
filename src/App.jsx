@@ -430,6 +430,29 @@ function ImportModal({onClose,onSave}) {
   };
 
   const toggleSelect=(idx)=>setSelected(p=>({...p,[idx]:!p[idx]}));
+
+  const mergeSelected=()=>{
+    const toMerge=parsedList.filter((_,i)=>selected[i]);
+    if(toMerge.length<2)return;
+    const merged={
+      title:toMerge.map(r=>r.title).join(" + "),
+      description:toMerge.map(r=>r.description).filter(Boolean).join(". "),
+      mealType:toMerge[0].mealType||"Main",
+      servings:toMerge[0].servings||4,
+      prepTime:toMerge[0].prepTime||"",
+      cookTime:toMerge[0].cookTime||"",
+      tags:[...new Set(toMerge.flatMap(r=>r.tags||[]))],
+      ingredients:toMerge.flatMap(r=>(r.ingredients||[]).map(ing=>({...ing,name:toMerge.length>1?(r.title+": "+ing.name):ing.name}))),
+      steps:toMerge.flatMap((r,i)=>{
+        const label=toMerge.length>1?["--- "+r.title+" ---"]:[];
+        return[...label,...(r.steps||[])];
+      }),
+      sides:[...new Set(toMerge.flatMap(r=>r.sides||[]))],
+      drinks:[...new Set(toMerge.flatMap(r=>r.drinks||[]))],
+    };
+    setParsedList([merged]);
+    setSelected({0:true});
+  };
   const selectedCount=Object.values(selected).filter(Boolean).length;
 
   const handleImport=()=>{
@@ -476,7 +499,10 @@ function ImportModal({onClose,onSave}) {
         <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:16}}>
           <button onClick={onClose} style={css.btn()}>Cancel</button>
           {status==="preview"?(
+            <div style={{display:"flex",gap:8}}>
+            {selectedCount>=2&&<button onClick={mergeSelected} style={{fontFamily:"'DM Sans', sans-serif",fontSize:13,fontWeight:600,padding:"8px 16px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"transparent",color:"#e8e0d6"}}>Merge {selectedCount} into 1</button>}
             <button onClick={handleImport} disabled={selectedCount===0} style={{...css.btn("accent"),opacity:selectedCount===0?0.5:1}}>Import {selectedCount} Dish{selectedCount!==1?"es":""}</button>
+            </div>
           ):(
             <button onClick={parseRecipe} disabled={status==="loading"||!input.trim()} style={{...css.btn("accent"),opacity:status==="loading"||!input.trim()?0.5:1}}>
               {status==="loading"?"Parsing...":"Parse Recipes"}
