@@ -669,7 +669,20 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
   const [showCreate,setShowCreate]=useState(false);
   const [editingCol,setEditingCol]=useState(null);
   const [colSearch,setColSearch]=useState("");
-  const [minRating,setMinRating]=useState(0);
+  const [colTags,setColTags]=useState([]);
+  const [colMealType,setColMealType]=useState("");
+  const [showColFilter,setShowColFilter]=useState(false);
+  const allColTags=useMemo(()=>{const s=new Set();collections.forEach(col=>col.recipeIds.forEach(id=>{const r=recipes.find(x=>x.id===id);if(r)r.tags?.forEach(t=>s.add(t));}));return[...s].sort();},[collections,recipes]);
+  const toggleColTag=(t)=>setColTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
+  const filteredCollections=useMemo(()=>{
+    return collections.filter(col=>{
+      const colRecipes=col.recipeIds.map(id=>recipes.find(r=>r.id===id)).filter(Boolean);
+      const matchSearch=!colSearch||col.name.toLowerCase().includes(colSearch.toLowerCase())||(col.description||"").toLowerCase().includes(colSearch.toLowerCase())||colRecipes.some(r=>r.title.toLowerCase().includes(colSearch.toLowerCase()));
+      const matchTags=colTags.length===0||colRecipes.some(r=>colTags.every(t=>r.tags?.includes(t)));
+      const matchMealType=!colMealType||colRecipes.some(r=>r.mealType===colMealType);
+      return matchSearch&&matchTags&&matchMealType;
+    });
+  },[collections,recipes,colSearch,colTags,colMealType]);
   const [name,setName]=useState("");
   const [description,setDescription]=useState("");
   const [selectedRecipes,setSelectedRecipes]=useState([]);
@@ -704,22 +717,37 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
         <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:20,margin:0}}>Collections</h3>
         <button onClick={startCreate} style={{fontFamily:"'DM Sans', sans-serif",fontSize:13,fontWeight:600,padding:"8px 16px",borderRadius:6,border:"none",cursor:"pointer",background:"#c8663e",color:"#fff"}}>+ New Collection</button>
       </div>
-      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-        <input style={{fontFamily:"'DM Sans', sans-serif",fontSize:14,padding:"9px 12px",borderRadius:6,border:"1px solid #3a3330",background:"#1a1714",color:"#e8e0d6",outline:"none",flex:1,minWidth:180}} value={colSearch} onChange={e=>setColSearch(e.target.value)} placeholder="Search collections or recipes inside them..."/>
-        <div style={{display:"flex",alignItems:"center",gap:4}}>
-          <span style={{fontSize:12,color:"#9a8e82"}}>Min:</span>
-          {[0,1,2,3,4,5].map(n=>(
-            <span key={n} onClick={()=>setMinRating(n===minRating?0:n)} style={{cursor:"pointer",fontSize:16,color:n<=minRating&&minRating>0?"#c4a44e":"#3a3330"}}>{n===0?"All":n<=minRating?"★":"☆"}</span>
-          ))}
-        </div>
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        <input style={{fontFamily:"'DM Sans', sans-serif",fontSize:14,padding:"9px 12px",borderRadius:6,border:"1px solid #3a3330",background:"#1a1714",color:"#e8e0d6",outline:"none",flex:1,minWidth:180}} value={colSearch} onChange={e=>setColSearch(e.target.value)} placeholder="Search collections, recipes..."/>
+        <button onClick={()=>setShowColFilter(p=>!p)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:13,fontWeight:600,padding:"8px 16px",borderRadius:6,border:showColFilter?"none":"1px solid #3a3330",cursor:"pointer",background:showColFilter?"#c8663e":"transparent",color:showColFilter?"#fff":"#e8e0d6"}}>{"🏷"} Filter{colTags.length>0||colMealType?" ("+(colTags.length+(colMealType?1:0))+")":""}</button>
       </div>
-
-      {collections.length===0&&!showCreate&&(
-        <div style={{textAlign:"center",padding:40,color:"#9a8e82"}}>
-          <p style={{fontSize:24,margin:"0 0 8px"}}>📚</p>
-          <p>No collections yet. Group your favorite meal combos together!</p>
+      {showColFilter&&(
+        <div style={{marginBottom:16}}>
+          <div style={{display:"flex",gap:6,marginBottom:8}}>
+            <button onClick={()=>setColMealType("")} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"5px 12px",borderRadius:6,border:"none",cursor:"pointer",background:colMealType===""?"#c8663e":"transparent",color:colMealType===""?"#fff":"#9a8e82"}}>All</button>
+            {["Main","Side","Appetizer","Dessert","Drink"].map(t=>(
+              <button key={t} onClick={()=>setColMealType(colMealType===t?"":t)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"5px 12px",borderRadius:6,border:"none",cursor:"pointer",background:colMealType===t?"#c8663e":"transparent",color:colMealType===t?"#fff":"#9a8e82"}}>{t}s</button>
+            ))}
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+            {allColTags.map(t=>(
+              <button key={t} onClick={()=>toggleColTag(t)} style={{display:"inline-block",fontFamily:"'DM Sans', sans-serif",fontSize:11,fontWeight:500,padding:"3px 8px",borderRadius:4,background:colTags.includes(t)?"rgba(200,102,62,0.12)":"rgba(200,102,62,0.1)",border:"1px solid "+(colTags.includes(t)?"#c8663e":"rgba(200,102,62,0.25)"),color:colTags.includes(t)?"#c8663e":"#d4845f",cursor:"pointer"}}>{t}</button>
+            ))}
+          </div>
         </div>
       )}
+
+      {collections.length===0&&!showCreate?(
+        <div style={{textAlign:"center",padding:40,color:"#9a8e82"}}>
+          <p style={{fontSize:24,margin:"0 0 8px"}}>{"📚"}</p>
+          <p>No collections yet. Group your favorite meal combos together!</p>
+        </div>
+      ):filteredCollections.length===0&&(colSearch||colTags.length>0||colMealType)?(
+        <div style={{textAlign:"center",padding:40,color:"#9a8e82"}}>
+          <p style={{fontSize:24,margin:"0 0 8px"}}>{"🔍"}</p>
+          <p>No collections match your filters.</p>
+        </div>
+      ):null}
 
       {collections.map(col=>{
         const colRecipes=col.recipeIds.map(id=>recipes.find(r=>r.id===id)).filter(Boolean);
