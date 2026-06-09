@@ -198,7 +198,7 @@ function StarRating({rating,onRate,size}) {
   );
 }
 
-function RecipeCard({recipe,onClick,collections}) {
+function RecipeCard({recipe,onClick,collections,onTagClick}) {
   return (
     <div style={css.card} onClick={onClick}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=theme.accent;e.currentTarget.style.background=theme.surfaceHover}}
@@ -211,7 +211,7 @@ function RecipeCard({recipe,onClick,collections}) {
         {recipe.cookCount>0&&<span style={css.badge(theme.greenBg,theme.green)}>Cooked {recipe.cookCount}×</span>}
       </div>
       <p style={{fontSize:13,color:theme.textMuted,margin:"6px 0 8px",lineHeight:1.5}}>{recipe.description}</p>
-      <div>{recipe.tags.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
+      <div>{recipe.tags.map(t=><span key={t} onClick={e=>{e.stopPropagation();if(onTagClick)onTagClick(t)}} style={{...css.tag,cursor:onTagClick?"pointer":"default"}}>{t}</span>)}</div>
       {collections&&collections.filter(col=>col.recipeIds.includes(recipe.id)).length>0&&(
         <div style={{marginTop:6}}>{collections.filter(col=>col.recipeIds.includes(recipe.id)).map(col=>(
           <span key={col.id} style={{display:"inline-block",fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:3,marginRight:4,background:"rgba(196,164,78,0.12)",color:"#c4a44e",border:"1px solid rgba(196,164,78,0.25)"}}>{"📚"} {col.name}</span>
@@ -677,7 +677,7 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
   const filteredCollections=useMemo(()=>{
     return collections.filter(col=>{
       const colRecipes=col.recipeIds.map(id=>recipes.find(r=>r.id===id)).filter(Boolean);
-      const matchSearch=!colSearch||col.name.toLowerCase().includes(colSearch.toLowerCase())||(col.description||"").toLowerCase().includes(colSearch.toLowerCase())||colRecipes.some(r=>r.title.toLowerCase().includes(colSearch.toLowerCase()));
+      const matchSearch=!colSearch||col.name.toLowerCase().includes(colSearch.toLowerCase())||(col.description||"").toLowerCase().includes(colSearch.toLowerCase())||colRecipes.some(r=>r.title.toLowerCase().includes(colSearch.toLowerCase())||r.ingredients?.some(ing=>ing.name.toLowerCase().includes(colSearch.toLowerCase())));
       const matchTags=colTags.length===0||colRecipes.some(r=>colTags.every(t=>r.tags?.includes(t)));
       const matchMealType=!colMealType||colRecipes.some(r=>r.mealType===colMealType);
       return matchSearch&&matchTags&&matchMealType;
@@ -1055,9 +1055,9 @@ export default function App() {
               if(group.length===0)return null;
               return(<div key={type||"other"} style={{marginBottom:20}}>
                 <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:16,fontWeight:600,color:"#9a8e82",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #3a3330"}}>{type||"Uncategorized"} ({group.length})</h3>
-                {group.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)} collections={collections}/>)}
+                {group.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)} collections={collections} onTagClick={t=>{setActiveTags(p=>p.includes(t)?p:[...p,t]);setShowTagFilter(true)}}/>)}
               </div>);
-            })):(sortedFiltered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)} collections={collections}/>))}
+            })):(sortedFiltered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)} collections={collections} onTagClick={t=>{setActiveTags(p=>p.includes(t)?p:[...p,t]);setShowTagFilter(true)}}/>))}
         </div>
       ):view==="shop"?(
         <ShoppingList recipes={recipes} shoppingRecipes={shoppingRecipes} onRemove={removeFromShopping} onClear={clearShopping}/>
