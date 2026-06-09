@@ -267,7 +267,7 @@ function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList,onEdit}) {
           <h2 style={{fontFamily:FONT_DISPLAY,fontSize:26,margin:0,display:"inline"}}>{recipe.title}</h2>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-          {"wakeLock" in navigator&&<button onClick={toggleScreenOn} style={{...css.btn(screenOn?"accent":"default"),background:screenOn?"#6a9a5b":"transparent",color:screenOn?"#fff":"#e8e0d6"}}>{screenOn?"🔓 Screen On":"🔒 Keep Screen On"}</button>}
+          {"wakeLock" in navigator&&<button onClick={toggleScreenOn} style={{...css.btn(screenOn?"accent":"default"),background:screenOn?"#6a9a5b":"transparent",color:screenOn?"#fff":"#e8e0d6"}}>{screenOn?"🔒 Screen Lock On":"🔓 Screen Lock Off"}</button>}
           <button onClick={logCook} style={css.btn("accent")}>🍳 Log Cook</button>
           <button onClick={()=>onAddToList(recipe)} style={css.btn()}>🛒 Add to List</button>
           <button onClick={()=>onEdit(recipe)} style={css.btn("blue")}>✏️ Edit</button>
