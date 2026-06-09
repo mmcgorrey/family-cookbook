@@ -550,7 +550,6 @@ function ShoppingList({recipes,shoppingRecipes,onRemove,onClear}) {
 function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan,onViewRecipe}) {
   const [addingDay,setAddingDay]=useState(null);
   const [search,setSearch]=useState("");
-  const [sortBy,setSortBy]=useState("type");
   const filteredRecipes=recipes.filter(r=>!search||r.title.toLowerCase().includes(search.toLowerCase()));
 
   const addToPlan=(day,recipeId)=>{
@@ -737,6 +736,7 @@ export default function App() {
   const [showTagFilter,setShowTagFilter]=useState(false);
   const [showAdd,setShowAdd]=useState(false);
   const [showImport,setShowImport]=useState(false);
+  const [sortBy,setSortBy]=useState("type");
   const [editingRecipe,setEditingRecipe]=useState(null);
   const [shoppingRecipes,setShoppingRecipes]=useState([]);
   const [mealPlan,setMealPlan]=useState({});
