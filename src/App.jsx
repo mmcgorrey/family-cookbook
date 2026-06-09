@@ -187,6 +187,17 @@ function TagFilter({activeTags,onToggle,allTags,activeMealType,onMealTypeChange}
   );
 }
 
+function StarRating({rating,onRate,size}) {
+  const sz=size||18;
+  return (
+    <div style={{display:"inline-flex",gap:2}}>
+      {[1,2,3,4,5].map(n=>(
+        <span key={n} onClick={e=>{e.stopPropagation();if(onRate)onRate(n===rating?0:n)}} style={{cursor:onRate?"pointer":"default",fontSize:sz,color:n<=rating?"#c4a44e":"#3a3330",transition:"color 0.1s"}}>{n<=rating?"★":"☆"}</span>
+      ))}
+    </div>
+  );
+}
+
 function RecipeCard({recipe,onClick}) {
   return (
     <div style={css.card} onClick={onClick}
@@ -197,10 +208,13 @@ function RecipeCard({recipe,onClick}) {
           {recipe.mealType&&<span style={css.mealTypeBadge(recipe.mealType)}>{recipe.mealType}</span>}
           <h3 style={css.cardTitle}>{recipe.title}</h3>
         </div>
-        {recipe.cookCount>0&&<span style={css.badge(theme.greenBg,theme.green)}>Cooked {recipe.cookCount}×</span>}
+        <div style={{display:"flex",gap:4}}>{recipe.goTo&&<span style={css.badge(theme.goldBg,theme.gold)}>⭐ Go-To</span>}{recipe.cookCount>0&&<span style={css.badge(theme.greenBg,theme.green)}>Cooked {recipe.cookCount}×</span>}</div>
       </div>
       <p style={{fontSize:13,color:theme.textMuted,margin:"6px 0 8px",lineHeight:1.5}}>{recipe.description}</p>
       <div>{recipe.tags.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
+        <StarRating rating={recipe.rating||0} size={14}/>
+      </div>
       <div style={css.meta}>
         {recipe.prepTime&&<span>Prep: {recipe.prepTime}</span>}
         {recipe.cookTime&&<span style={{marginLeft:12}}>Cook: {recipe.cookTime}</span>}
@@ -229,6 +243,7 @@ function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList,onEdit}) {
           <h2 style={{fontFamily:FONT_DISPLAY,fontSize:26,margin:0,display:"inline"}}>{recipe.title}</h2>
         </div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button onClick={()=>onUpdate({...recipe,goTo:!recipe.goTo})} style={{...css.btn(recipe.goTo?"accent":"default"),background:recipe.goTo?"#c4a44e":"transparent",color:recipe.goTo?"#fff":"#e8e0d6"}}>{recipe.goTo?"⭐ Go-To":"☆ Mark Go-To"}</button>
           <button onClick={logCook} style={css.btn("accent")}>🍳 Log Cook</button>
           <button onClick={()=>onAddToList(recipe)} style={css.btn()}>🛒 Add to List</button>
           <button onClick={()=>onEdit(recipe)} style={css.btn("blue")}>✏️ Edit</button>
@@ -248,6 +263,10 @@ function RecipeDetail({recipe,onBack,onUpdate,onDelete,onAddToList,onEdit}) {
       <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:20,fontSize:13,color:theme.textMuted}}>
         <span>Prep: {recipe.prepTime}</span><span>Cook: {recipe.cookTime}</span>
         <span>Cooked: {recipe.cookCount} time{recipe.cookCount!==1?"s":""}</span><span>Last: {fmtDate(recipe.lastCooked)}</span>
+      </div>
+      <div style={{...css.section,display:"flex",alignItems:"center",gap:10}}>
+        <span style={{fontSize:14,fontWeight:600}}>Rating:</span>
+        <StarRating rating={recipe.rating||0} onRate={r=>onUpdate({...recipe,rating:r})} size={22}/>
       </div>
       <div style={{...css.section,display:"flex",alignItems:"center",gap:10}}>
         <span style={{fontSize:14,fontWeight:600}}>Servings:</span>
@@ -442,7 +461,15 @@ function ImportModal({onClose,onSave}) {
       prepTime:toMerge[0].prepTime||"",
       cookTime:toMerge[0].cookTime||"",
       tags:[...new Set(toMerge.flatMap(r=>r.tags||[]))],
-      ingredients:toMerge.flatMap(r=>(r.ingredients||[]).map(ing=>({...ing,name:toMerge.length>1?(r.title+": "+ing.name):ing.name}))),
+      ingredients:(()=>{
+        const map={};
+        toMerge.forEach(r=>(r.ingredients||[]).forEach(ing=>{
+          const key=(ing.name||"").toLowerCase().trim()+"|"+(ing.unit||"").toLowerCase().trim();
+          if(map[key]){map[key].amount=(map[key].amount||0)+(ing.amount||0);}
+          else{map[key]={name:ing.name,amount:ing.amount||0,unit:ing.unit||""};}
+        }));
+        return Object.values(map);
+      })(),
       steps:toMerge.flatMap((r,i)=>{
         const label=toMerge.length>1?["--- "+r.title+" ---"]:[];
         return[...label,...(r.steps||[])];
@@ -825,6 +852,7 @@ export default function App() {
     else if(sortBy==="alpha")s.sort((a,b)=>a.title.localeCompare(b.title));
     else if(sortBy==="mostCooked")s.sort((a,b)=>(b.cookCount||0)-(a.cookCount||0));
     else if(sortBy==="lastCooked")s.sort((a,b)=>(b.lastCooked||0)-(a.lastCooked||0));
+    else if(sortBy==="topRated")s.sort((a,b)=>(b.rating||0)-(a.rating||0));
     return s;
   },[filtered,sortBy]);
 
@@ -954,7 +982,7 @@ export default function App() {
 
         </div>
         <nav style={css.nav}>
-          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"},{k:"collections",l:"📚 Collections"}].map(({k,l})=>(
+          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"},{k:"goto",l:"⭐ Go-To ("+recipes.filter(r=>r.goTo).length+")"},{k:"collections",l:"📚 Collections"}].map(({k,l})=>(
             <button key={k} style={css.navBtn(view===k&&!selectedId)} onClick={()=>{setView(k);setSelectedId(null);}}>{l}</button>
           ))}
           <button style={css.navBtn(false)} onClick={()=>setShowImport(true)}>🤖 Import</button>
@@ -968,7 +996,7 @@ export default function App() {
         <div>
           <div style={css.searchRow}>
             <input style={css.input} placeholder="Search recipes, ingredients..." value={search} onChange={e=>setSearch(e.target.value)}/>
-            <select style={css.select} value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="type">By Type</option><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="alpha">A-Z</option><option value="mostCooked">Most Cooked</option><option value="lastCooked">Last Cooked</option></select>
+            <select style={css.select} value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="type">By Type</option><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="alpha">A-Z</option><option value="mostCooked">Most Cooked</option><option value="lastCooked">Last Cooked</option><option value="topRated">Top Rated</option></select>
             <button style={css.btn(showTagFilter?"accent":"default")} onClick={()=>setShowTagFilter(p=>!p)}>🏷 Filter{activeTags.length>0||activeMealType?` (${activeTags.length+(activeMealType?1:0)})`:""}</button>
           </div>
           {showTagFilter&&<TagFilter activeTags={activeTags} onToggle={toggleTag} allTags={allTags} activeMealType={activeMealType} onMealTypeChange={setActiveMealType}/>}
@@ -987,6 +1015,13 @@ export default function App() {
         <ShoppingList recipes={recipes} shoppingRecipes={shoppingRecipes} onRemove={removeFromShopping} onClear={clearShopping}/>
       ):view==="plan"?(
         <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}}/>
+      ):view==="goto"?(
+        <div>
+          <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:20,margin:"0 0 16px"}}>Our Go-To Recipes <span style={{fontSize:14,color:"#9a8e82",fontWeight:400}}>({recipes.filter(r=>r.goTo).length}/14)</span></h3>
+          {recipes.filter(r=>r.goTo).length===0?(
+            <div style={{textAlign:"center",padding:40,color:"#9a8e82"}}><p style={{fontSize:24}}>\u2b50</p><p>No go-to recipes yet. Open a recipe and tap "Mark Go-To" to add it here.</p></div>
+          ):(recipes.filter(r=>r.goTo).map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>))}
+        </div>
       ):view==="collections"?(
         <Collections recipes={recipes} collections={collections} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}}/>
       ):null}
