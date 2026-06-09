@@ -579,7 +579,7 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan,onVie
             </div>
             {dayRecipes.map(r=>(
               <div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",fontSize:14}}>
-                <span>{r.mealType&&<span style={{...css.mealTypeBadge(r.mealType),fontSize:9,padding:"1px 5px",marginRight:6}}>{r.mealType}</span>}{r.title}</span>
+                <span onClick={()=>onViewRecipe(r.id)} style={{cursor:"pointer"}}>{r.mealType&&<span style={{...css.mealTypeBadge(r.mealType),fontSize:9,padding:"1px 5px",marginRight:6}}>{r.mealType}</span>}<span style={{borderBottom:"1px dashed #4a4038"}}>{r.title}</span></span>
                 <span onClick={()=>removeFromPlan(day,r.id)} style={{cursor:"pointer",color:theme.red,fontSize:16,fontWeight:700,padding:"0 4px"}}>×</span>
               </div>
             ))}
