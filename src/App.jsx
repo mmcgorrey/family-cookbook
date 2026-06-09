@@ -547,9 +547,10 @@ function ShoppingList({recipes,shoppingRecipes,onRemove,onClear}) {
   );
 }
 
-function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan}) {
+function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan,onViewRecipe}) {
   const [addingDay,setAddingDay]=useState(null);
   const [search,setSearch]=useState("");
+  const [sortBy,setSortBy]=useState("type");
   const filteredRecipes=recipes.filter(r=>!search||r.title.toLowerCase().includes(search.toLowerCase()));
 
   const addToPlan=(day,recipeId)=>{
@@ -608,7 +609,7 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan}) {
 
 // ─── Collections ───
 
-function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCollection,onAddToPlanFromCollection}) {
+function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCollection,onAddToPlanFromCollection,onViewRecipe}) {
   const [showCreate,setShowCreate]=useState(false);
   const [editingCol,setEditingCol]=useState(null);
   const [name,setName]=useState("");
@@ -671,7 +672,7 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
                 {colRecipes.map(r=>(
                   <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #3a3330",fontSize:14}}>
                     {r.mealType&&<span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:3,background:r.mealType==="Main"?"rgba(200,102,62,0.12)":"rgba(106,154,91,0.15)",color:r.mealType==="Main"?"#c8663e":"#6a9a5b"}}>{r.mealType}</span>}
-                    <span>{r.title}</span>
+                    <span style={{borderBottom:"1px dashed #4a4038",cursor:"pointer"}} onClick={()=>onViewRecipe(r.id)}>{r.title}</span>
                   </div>
                 ))}
                 <div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap"}}>
@@ -790,6 +791,16 @@ export default function App() {
       return matchSearch&&matchTags&&matchMealType;
     });
   },[recipes,search,activeTags,activeMealType]);
+
+  const sortedFiltered=useMemo(()=>{
+    const s=[...filtered];
+    if(sortBy==="newest")s.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    else if(sortBy==="oldest")s.sort((a,b)=>(a.createdAt||0)-(b.createdAt||0));
+    else if(sortBy==="alpha")s.sort((a,b)=>a.title.localeCompare(b.title));
+    else if(sortBy==="mostCooked")s.sort((a,b)=>(b.cookCount||0)-(a.cookCount||0));
+    else if(sortBy==="lastCooked")s.sort((a,b)=>(b.lastCooked||0)-(a.lastCooked||0));
+    return s;
+  },[filtered,sortBy]);
 
   const selected=selectedId?recipes.find(r=>r.id===selectedId):null;
 
@@ -931,19 +942,27 @@ export default function App() {
         <div>
           <div style={css.searchRow}>
             <input style={css.input} placeholder="Search recipes, ingredients..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            <select style={css.select} value={sortBy} onChange={e=>setSortBy(e.target.value)}><option value="type">By Type</option><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="alpha">A-Z</option><option value="mostCooked">Most Cooked</option><option value="lastCooked">Last Cooked</option></select>
             <button style={css.btn(showTagFilter?"accent":"default")} onClick={()=>setShowTagFilter(p=>!p)}>🏷 Filter{activeTags.length>0||activeMealType?` (${activeTags.length+(activeMealType?1:0)})`:""}</button>
           </div>
           {showTagFilter&&<TagFilter activeTags={activeTags} onToggle={toggleTag} allTags={allTags} activeMealType={activeMealType} onMealTypeChange={setActiveMealType}/>}
           {filtered.length===0?(
             <div style={{textAlign:"center",padding:40,color:theme.textMuted}}><p style={{fontSize:28}}>🍽</p><p>No recipes match your search.</p></div>
-          ):(filtered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>))}
+          ):sortBy==="type"?(["Main","Side","Appetizer","Dessert","Drink",""].map(type=>{
+              const group=filtered.filter(r=>type===""?(r.mealType||"")==="":r.mealType===type);
+              if(group.length===0)return null;
+              return(<div key={type||"other"} style={{marginBottom:20}}>
+                <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:16,fontWeight:600,color:"#9a8e82",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #3a3330"}}>{type||"Uncategorized"} ({group.length})</h3>
+                {group.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>)}
+              </div>);
+            })):(sortedFiltered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>))}
         </div>
       ):view==="shop"?(
         <ShoppingList recipes={recipes} shoppingRecipes={shoppingRecipes} onRemove={removeFromShopping} onClear={clearShopping}/>
       ):view==="plan"?(
-        <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan}/>
+        <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}}/>
       ):view==="collections"?(
-        <Collections recipes={recipes} collections={collections} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection}/>
+        <Collections recipes={recipes} collections={collections} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}}/>
       ):null}
 
       {showAdd&&<RecipeFormModal onClose={()=>setShowAdd(false)} onSave={addRecipe} allTags={allTags}/>}
