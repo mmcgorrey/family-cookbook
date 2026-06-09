@@ -749,7 +749,7 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
         </div>
       ):null}
 
-      {collections.map(col=>{
+      {[...filteredCollections].sort((a,b)=>(b.rating||0)-(a.rating||0)||a.name.localeCompare(b.name)).map(col=>{
         const colRecipes=col.recipeIds.map(id=>recipes.find(r=>r.id===id)).filter(Boolean);
         const isExpanded=expandedCol===col.id;
         return (
