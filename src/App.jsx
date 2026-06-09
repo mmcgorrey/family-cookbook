@@ -198,7 +198,7 @@ function StarRating({rating,onRate,size}) {
   );
 }
 
-function RecipeCard({recipe,onClick}) {
+function RecipeCard({recipe,onClick,collections}) {
   return (
     <div style={css.card} onClick={onClick}
       onMouseEnter={e=>{e.currentTarget.style.borderColor=theme.accent;e.currentTarget.style.background=theme.surfaceHover}}
@@ -212,6 +212,11 @@ function RecipeCard({recipe,onClick}) {
       </div>
       <p style={{fontSize:13,color:theme.textMuted,margin:"6px 0 8px",lineHeight:1.5}}>{recipe.description}</p>
       <div>{recipe.tags.map(t=><span key={t} style={css.tag}>{t}</span>)}</div>
+      {collections&&collections.filter(col=>col.recipeIds.includes(recipe.id)).length>0&&(
+        <div style={{marginTop:6}}>{collections.filter(col=>col.recipeIds.includes(recipe.id)).map(col=>(
+          <span key={col.id} style={{display:"inline-block",fontSize:10,fontWeight:600,padding:"2px 7px",borderRadius:3,marginRight:4,background:"rgba(196,164,78,0.12)",color:"#c4a44e",border:"1px solid rgba(196,164,78,0.25)"}}>{"📚"} {col.name}</span>
+        ))}</div>
+      )}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:6}}>
         <StarRating rating={recipe.rating||0} size={14}/>
       </div>
@@ -663,6 +668,8 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan,onVie
 function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCollection,onAddToPlanFromCollection,onViewRecipe,goToOnly}) {
   const [showCreate,setShowCreate]=useState(false);
   const [editingCol,setEditingCol]=useState(null);
+  const [colSearch,setColSearch]=useState("");
+  const [minRating,setMinRating]=useState(0);
   const [name,setName]=useState("");
   const [description,setDescription]=useState("");
   const [selectedRecipes,setSelectedRecipes]=useState([]);
@@ -696,6 +703,15 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
         <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:20,margin:0}}>Collections</h3>
         <button onClick={startCreate} style={{fontFamily:"'DM Sans', sans-serif",fontSize:13,fontWeight:600,padding:"8px 16px",borderRadius:6,border:"none",cursor:"pointer",background:"#c8663e",color:"#fff"}}>+ New Collection</button>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+        <input style={{fontFamily:"'DM Sans', sans-serif",fontSize:14,padding:"9px 12px",borderRadius:6,border:"1px solid #3a3330",background:"#1a1714",color:"#e8e0d6",outline:"none",flex:1,minWidth:180}} value={colSearch} onChange={e=>setColSearch(e.target.value)} placeholder="Search collections or recipes inside them..."/>
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          <span style={{fontSize:12,color:"#9a8e82"}}>Min:</span>
+          {[0,1,2,3,4,5].map(n=>(
+            <span key={n} onClick={()=>setMinRating(n===minRating?0:n)} style={{cursor:"pointer",fontSize:16,color:n<=minRating&&minRating>0?"#c4a44e":"#3a3330"}}>{n===0?"All":n<=minRating?"★":"☆"}</span>
+          ))}
+        </div>
       </div>
 
       {collections.length===0&&!showCreate&&(
@@ -1011,9 +1027,9 @@ export default function App() {
               if(group.length===0)return null;
               return(<div key={type||"other"} style={{marginBottom:20}}>
                 <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:16,fontWeight:600,color:"#9a8e82",textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:8,paddingBottom:6,borderBottom:"1px solid #3a3330"}}>{type||"Uncategorized"} ({group.length})</h3>
-                {group.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>)}
+                {group.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)} collections={collections}/>)}
               </div>);
-            })):(sortedFiltered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)}/>))}
+            })):(sortedFiltered.map(r=><RecipeCard key={r.id} recipe={r} onClick={()=>setSelectedId(r.id)} collections={collections}/>))}
         </div>
       ):view==="shop"?(
         <ShoppingList recipes={recipes} shoppingRecipes={shoppingRecipes} onRemove={removeFromShopping} onClear={clearShopping}/>
