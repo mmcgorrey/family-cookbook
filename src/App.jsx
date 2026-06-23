@@ -109,11 +109,14 @@ async function saveRecipeToDb(recipe) {
 async function deleteRecipeFromDb(id) {
   try { await deleteDoc(doc(db, "recipes", id)); } catch(e) { console.error("Delete recipe failed:", e); }
 }
-async function saveShoppingToDb(shopping) {
-  try { await setDoc(doc(db, "app", "shopping"), { items: shopping }); } catch(e) { console.error("Save shopping failed:", e); }
+async function saveShoppingToDb(household, shopping) {
+  try { await setDoc(doc(db, "households", household+"-shopping"), { items: shopping }); } catch(e) { console.error("Save shopping failed:", e); }
 }
-async function saveMealPlanToDb(plan) {
-  try { await setDoc(doc(db, "app", "mealplan"), { days: plan }); } catch(e) { console.error("Save meal plan failed:", e); }
+async function saveMealPlanToDb(household, plan) {
+  try { await setDoc(doc(db, "households", household+"-mealplan"), { days: plan }); } catch(e) { console.error("Save meal plan failed:", e); }
+}
+async function saveHouseholdMetaToDb(household, meta) {
+  try { await setDoc(doc(db, "households", household+"-meta"), meta); } catch(e) { console.error("Save household meta failed:", e); }
 }
 
 async function saveCollectionToDb(col) {
@@ -685,7 +688,7 @@ function MealPlanner({recipes,mealPlan,setMealPlan,onAddToShoppingFromPlan,onVie
 
 // ─── Collections ───
 
-function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCollection,onAddToPlanFromCollection,onViewRecipe,goToOnly}) {
+function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCollection,onAddToPlanFromCollection,onViewRecipe,goToOnly,goToIds,ratings,onToggleGoTo,onSetRating}) {
   const [showCreate,setShowCreate]=useState(false);
   const [editingCol,setEditingCol]=useState(null);
   const [colSearch,setColSearch]=useState("");
@@ -769,7 +772,7 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
         </div>
       ):null}
 
-      {[...filteredCollections].sort((a,b)=>(b.rating||0)-(a.rating||0)||a.name.localeCompare(b.name)).map(col=>{
+      {[...filteredCollections].sort((a,b)=>(((ratings&&ratings[b.id])||0)-((ratings&&ratings[a.id])||0))||a.name.localeCompare(b.name)).map(col=>{
         const colRecipes=col.recipeIds.map(id=>recipes.find(r=>r.id===id)).filter(Boolean);
         const isExpanded=expandedCol===col.id;
         return (
@@ -778,9 +781,9 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
               <div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
                   <h4 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:17,margin:0}}>{col.name}</h4>
-                  {col.goTo&&<span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:3,background:"rgba(196,164,78,0.12)",color:"#c4a44e"}}>GO-TO</span>}
+                  {goToIds&&goToIds.includes(col.id)&&<span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:3,background:"rgba(196,164,78,0.12)",color:"#c4a44e"}}>GO-TO</span>}
                 </div>
-                <div style={{marginTop:4}}><StarRating rating={col.rating||0} onRate={r=>{onSave({...col,rating:r})}} size={16}/></div>
+                <div style={{marginTop:4}}><StarRating rating={(ratings&&ratings[col.id])||0} onRate={r=>onSetRating(col.id,r)} size={16}/></div>
                 {col.description&&<p style={{fontSize:13,color:"#9a8e82",margin:"4px 0 0"}}>{col.description}</p>}
                 <div style={{fontSize:12,color:"#9a8e82",marginTop:4}}>{colRecipes.length} recipe{colRecipes.length!==1?"s":""}</div>
               </div>
@@ -797,7 +800,7 @@ function Collections({recipes,collections,onSave,onDelete,onAddToShoppingFromCol
                 <div style={{display:"flex",gap:6,marginTop:12,flexWrap:"wrap"}}>
                   <button onClick={()=>onAddToShoppingFromCollection(col.recipeIds)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:"#c8663e",color:"#fff"}}>🛒 Shopping List</button>
                   <select onChange={e=>{if(e.target.value)onAddToPlanFromCollection(col,e.target.value);e.target.value="";}} defaultValue="" style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"#1a1714",color:"#e8e0d6"}}><option value="" disabled>📅 Add to Day...</option><option value="Monday">Monday</option><option value="Tuesday">Tuesday</option><option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option><option value="Friday">Friday</option><option value="Saturday">Saturday</option><option value="Sunday">Sunday</option></select>
-                  <button onClick={()=>onSave({...col,goTo:!col.goTo})} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:col.goTo?"#c4a44e":"transparent",color:col.goTo?"#fff":"#e8e0d6",borderWidth:1,borderStyle:"solid",borderColor:col.goTo?"#c4a44e":"#3a3330"}}>{col.goTo?"⭐ Go-To":"☆ Mark Go-To"}</button>
+                  <button onClick={()=>onToggleGoTo(col.id)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:goToIds&&goToIds.includes(col.id)?"#c4a44e":"transparent",color:goToIds&&goToIds.includes(col.id)?"#fff":"#e8e0d6",borderWidth:1,borderStyle:"solid",borderColor:goToIds&&goToIds.includes(col.id)?"#c4a44e":"#3a3330"}}>{goToIds&&goToIds.includes(col.id)?"⭐ Go-To":"☆ Mark Go-To"}</button>
                   <button onClick={()=>startEdit(col)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"1px solid #3a3330",cursor:"pointer",background:"transparent",color:"#e8e0d6"}}>✏️ Edit</button>
                   <button onClick={()=>onDelete(col.id)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:12,fontWeight:600,padding:"6px 12px",borderRadius:6,border:"none",cursor:"pointer",background:"#b85450",color:"#fff"}}>Delete</button>
                 </div>
@@ -858,10 +861,13 @@ export default function App() {
   const [showAdd,setShowAdd]=useState(false);
   const [showImport,setShowImport]=useState(false);
   const [sortBy,setSortBy]=useState("type");
+  const [household,setHousehold]=useState(()=>{try{return localStorage.getItem("cookbook-household")||"colorado";}catch{return "colorado";}});
+  const switchHousehold=(h)=>{setHousehold(h);try{localStorage.setItem("cookbook-household",h);}catch{}};
   const [editingRecipe,setEditingRecipe]=useState(null);
   const [shoppingRecipes,setShoppingRecipes]=useState([]);
   const [mealPlan,setMealPlan]=useState({});
   const [collections,setCollections]=useState([]);
+  const [householdMeta,setHouseholdMeta]=useState({goToIds:[],ratings:{}});
   const [loaded,setLoaded]=useState(false);
   const [saveStatus,setSaveStatus]=useState("");
 
@@ -881,18 +887,20 @@ export default function App() {
   },[]);
 
   useEffect(()=>{
-    const unsub = onSnapshot(doc(db, "app", "shopping"), (snap) => {
-      if (snap.exists()) setShoppingRecipes(snap.data().items || []);
+    setShoppingRecipes([]);
+    const unsub = onSnapshot(doc(db, "households", household+"-shopping"), (snap) => {
+      setShoppingRecipes(snap.exists()?(snap.data().items||[]):[]);
     });
     return () => unsub();
-  },[]);
+  },[household]);
 
   useEffect(()=>{
-    const unsub = onSnapshot(doc(db, "app", "mealplan"), (snap) => {
-      if (snap.exists()) setMealPlan(snap.data().days || {});
+    setMealPlan({});
+    const unsub = onSnapshot(doc(db, "households", household+"-mealplan"), (snap) => {
+      setMealPlan(snap.exists()?(snap.data().days||{}):{});
     });
     return () => unsub();
-  },[]);
+  },[household]);
 
   useEffect(()=>{
     const unsub = onSnapshot(collection(db, "collections"), (snapshot) => {
@@ -900,6 +908,14 @@ export default function App() {
     });
     return () => unsub();
   },[]);
+
+  useEffect(()=>{
+    setHouseholdMeta({goToIds:[],ratings:{}});
+    const unsub = onSnapshot(doc(db, "households", household+"-meta"), (snap) => {
+      setHouseholdMeta(snap.exists()?{goToIds:snap.data().goToIds||[],ratings:snap.data().ratings||{}}:{goToIds:[],ratings:{}});
+    });
+    return () => unsub();
+  },[household]);
 
   const toggleTag=(t)=>setActiveTags(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t]);
   const allTags=useMemo(()=>{const s=new Set(ALL_TAGS);recipes.forEach(r=>r.tags?.forEach(t=>s.add(t)));return[...s];},[recipes]);
@@ -954,25 +970,25 @@ export default function App() {
   const addToShoppingList=(recipe)=>{
     const updated = shoppingRecipes.find(s=>s.id===recipe.id) ? shoppingRecipes : [...shoppingRecipes,{id:recipe.id,servings:recipe.servings}];
     setShoppingRecipes(updated);
-    saveShoppingToDb(updated);
+    saveShoppingToDb(household,updated);
     setView("shop");
   };
 
   const removeFromShopping=(id)=>{
     const updated = shoppingRecipes.filter(s=>s.id!==id);
     setShoppingRecipes(updated);
-    saveShoppingToDb(updated);
+    saveShoppingToDb(household,updated);
   };
 
   const clearShopping=()=>{
     setShoppingRecipes([]);
-    saveShoppingToDb([]);
+    saveShoppingToDb(household,[]);
   };
 
   const updateMealPlan=(updater)=>{
     setMealPlan(prev=>{
       const updated = typeof updater === 'function' ? updater(prev) : updater;
-      saveMealPlanToDb(updated);
+      saveMealPlanToDb(household,updated);
       return updated;
     });
   };
@@ -986,7 +1002,7 @@ export default function App() {
       }
     });
     setShoppingRecipes(updated);
-    saveShoppingToDb(updated);
+    saveShoppingToDb(household,updated);
     setView("shop");
   };
 
@@ -1006,6 +1022,24 @@ export default function App() {
     saveCollectionToDb(col);
   };
 
+  const toggleGoTo=(colId)=>{
+    setHouseholdMeta(prev=>{
+      const goToIds=prev.goToIds.includes(colId)?prev.goToIds.filter(id=>id!==colId):[...prev.goToIds,colId];
+      const updated={...prev,goToIds};
+      saveHouseholdMetaToDb(household,updated);
+      return updated;
+    });
+  };
+
+  const setColRating=(colId,rating)=>{
+    setHouseholdMeta(prev=>{
+      const ratings={...prev.ratings,[colId]:rating};
+      const updated={...prev,ratings};
+      saveHouseholdMetaToDb(household,updated);
+      return updated;
+    });
+  };
+
   const removeCollection=(id)=>{
     setCollections(p=>p.filter(c=>c.id!==id));
     deleteCollectionFromDb(id);
@@ -1020,7 +1054,7 @@ export default function App() {
       }
     });
     setShoppingRecipes(updated);
-    saveShoppingToDb(updated);
+    saveShoppingToDb(household,updated);
     setView("shop");
   };
 
@@ -1042,15 +1076,26 @@ export default function App() {
     <div style={css.app}>
       <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"/>
       <header style={css.header}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:8,marginBottom:16,background:household==="colorado"?"rgba(200,102,62,0.15)":"rgba(91,138,181,0.18)",border:"1px solid "+(household==="colorado"?"#c8663e":"#5b8ab5")}}>
+          <span style={{fontSize:20}}>📍</span>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,color:"#9a8e82",textTransform:"uppercase",letterSpacing:"0.06em"}}>You are viewing</div>
+            <div style={{fontSize:16,fontWeight:700,fontFamily:"'Playfair Display', Georgia, serif",color:household==="colorado"?"#d4845f":"#7da9cc"}}>{household==="colorado"?"Colorado Kitchen":"Georgia Kitchen"}</div>
+          </div>
+          <select value={household} onChange={e=>switchHousehold(e.target.value)} style={{fontFamily:"'DM Sans', sans-serif",fontSize:14,fontWeight:600,padding:"8px 12px",borderRadius:6,border:"1px solid "+(household==="colorado"?"#c8663e":"#5b8ab5"),background:"#1a1714",color:"#e8e0d6",cursor:"pointer"}}>
+            <option value="colorado">🏔️ Colorado</option>
+            <option value="georgia">🍑 Georgia</option>
+          </select>
+        </div>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <h1 style={css.title}>🍳 McGorrey Family Cookbook</h1>
-            <p style={css.subtitle}>{recipes.length} recipes — your kitchen, your rules {saveStatus&&<span style={{color:theme.green,marginLeft:8}}>{saveStatus}</span>}</p>
+            <p style={css.subtitle}>{recipes.length} recipes — shared library {saveStatus&&<span style={{color:theme.green,marginLeft:8}}>{saveStatus}</span>}</p>
           </div>
 
         </div>
         <nav style={css.nav}>
-          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"},{k:"goto",l:"⭐ Go-To ("+collections.filter(col=>col.goTo).length+"/14)"},{k:"collections",l:"📚 Collections"}].map(({k,l})=>(
+          {[{k:"browse",l:"📖 Recipes"},{k:"shop",l:`🛒 Shopping${shoppingRecipes.length?` (${shoppingRecipes.length})`:""}`},{k:"plan",l:"📅 Meal Plan"},{k:"goto",l:"⭐ Go-To ("+householdMeta.goToIds.length+"/14)"},{k:"collections",l:"📚 Collections"}].map(({k,l})=>(
             <button key={k} style={css.navBtn(view===k&&!selectedId)} onClick={()=>{setView(k);setSelectedId(null);}}>{l}</button>
           ))}
           <button style={css.navBtn(false)} onClick={()=>setShowImport(true)}>🤖 Import</button>
@@ -1085,15 +1130,15 @@ export default function App() {
         <MealPlanner recipes={recipes} mealPlan={mealPlan} setMealPlan={updateMealPlan} onAddToShoppingFromPlan={addToShoppingFromPlan} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}}/>
       ):view==="goto"?(
         <div>
-          <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:20,margin:"0 0 16px"}}>Our Go-To Meals <span style={{fontSize:14,color:"#9a8e82",fontWeight:400}}>({collections.filter(col=>col.goTo).length}/14)</span></h3>
-          {collections.filter(col=>col.goTo).length===0?(
+          <h3 style={{fontFamily:"'Playfair Display', Georgia, serif",fontSize:20,margin:"0 0 16px"}}>Our Go-To Meals <span style={{fontSize:14,color:"#9a8e82",fontWeight:400}}>({householdMeta.goToIds.length}/14)</span></h3>
+          {householdMeta.goToIds.length===0?(
             <div style={{textAlign:"center",padding:40,color:"#9a8e82"}}><p style={{fontSize:24}}>{"⭐"}</p><p>No go-to meals yet. Go to Collections and mark your favorites.</p></div>
           ):(
-            <Collections recipes={recipes} collections={collections.filter(col=>col.goTo)} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}} goToOnly={true}/>
+            <Collections recipes={recipes} collections={collections.filter(col=>householdMeta.goToIds.includes(col.id))} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}} goToOnly={true} goToIds={householdMeta.goToIds} ratings={householdMeta.ratings} onToggleGoTo={toggleGoTo} onSetRating={setColRating}/>
           )}
         </div>
       ):view==="collections"?(
-        <Collections recipes={recipes} collections={collections} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}}/>
+        <Collections recipes={recipes} collections={collections} onSave={saveCollection} onDelete={removeCollection} onAddToShoppingFromCollection={addToShoppingFromCollection} onAddToPlanFromCollection={addToPlanFromCollection} onViewRecipe={(id)=>{setSelectedId(id);setView("browse")}} goToIds={householdMeta.goToIds} ratings={householdMeta.ratings} onToggleGoTo={toggleGoTo} onSetRating={setColRating}/>
       ):null}
 
       {showAdd&&<RecipeFormModal onClose={()=>setShowAdd(false)} onSave={addRecipe} allTags={allTags}/>}
